@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  cassandra:
+    build:
+      context: .
+      dockerfile: Dockerfile-cassandra
+    container_name: sql-translator-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=SqlTranslatorCluster
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  cassandra-data:

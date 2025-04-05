@@ -1,0 +1,11 @@
+FROM cassandra:latest
+
+# Modificar archivo de configuración para habilitar autenticación
+RUN sed -i 's/authenticator: AllowAllAuthenticator/authenticator: PasswordAuthenticator/g' /etc/cassandra/cassandra.yaml && \
+    sed -i 's/authorizer: AllowAllAuthorizer/authorizer: CassandraAuthorizer/g' /etc/cassandra/cassandra.yaml
+
+# Copiar script de inicialización
+COPY cassandra-init.sh /docker-entrypoint-initdb.d/
+
+# Dar permisos de ejecución al script
+RUN chmod +x /docker-entrypoint-initdb.d/cassandra-init.sh
