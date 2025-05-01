@@ -1,30 +1,32 @@
 // src/App.tsx
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
 import TranslatorPage from './components/TranslatorPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from './contexts/AuthContext';
+import './styles/LoginPage.css';
 
 const App: React.FC = () => {
-  // Asegurarse de que el elemento html y body ocupen toda la pantalla
-  useEffect(() => {
-    document.documentElement.style.height = '100%';
-    document.body.style.height = '100%';
-    document.body.style.margin = '0';
-    document.body.style.padding = '0';
-    document.body.style.overflow = 'hidden';
-  }, []);
-
   return (
-    <div className="App">
+    <AuthProvider>
       <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/translator" element={<TranslatorPage />} />
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
+        <div className="App">
+          <Routes>
+            {/* Ruta pública: Login */}
+            <Route path="/" element={<LoginPage />} />
+            
+            {/* Rutas protegidas */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/translator" element={<TranslatorPage />} />
+            </Route>
+            
+            {/* Redirección para rutas no encontradas */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </Router>
-    </div>
+    </AuthProvider>
   );
 };
 
