@@ -1,45 +1,82 @@
 // src/sql-translator/translator-module.ts
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { SqlParserModule } from '../sql-parser/sql-parser.module';
-import { TranslatorService } from './services/translator.service';
-import { ValidationService } from './services/validation.service';
-import { CassandraModule } from './cassandra-connection/cassandra.module';
+import { HttpModule } from '@nestjs/axios';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 
-// Importar todos los traductores
+// Importar SqlParserModule
+import { SqlParserModule } from '../sql-parser/sql-parser.module';
+
+// Servicios
+import { TranslatorService } from './services/translator.service';
+import { CassandraService } from './cassandra-connection/cassandra.service';
+import { PermissionsApiService } from './services/permissions-api.service';
+import { PermissionCacheService } from './services/permission-cache.service';
+import { ResponseFormatterService } from './services/response-formatter.service'; // Importamos el nuevo servicio
+
+// Controladores
+import { TranslatorController } from '../controllers/translator.controller';
+
+// Traductores
 import { DatabaseTranslator } from './translators/database.translator';
 import { TableTranslator } from './translators/table.translator';
+import { IndexTranslator } from './translators/index.translator';
+import { ViewTranslator } from './translators/view.translator';
 import { SelectTranslator } from './translators/select.translator';
 import { InsertTranslator } from './translators/insert.translator';
 import { UpdateTranslator } from './translators/update.translator';
 import { DeleteTranslator } from './translators/delete.translator';
-import { IndexTranslator } from './translators/index.translator';
-import { ViewTranslator } from './translators/view.translator';
 import { OperatorsTranslator } from './translators/operators.translator';
 import { ExecutionTranslator } from './translators/execution.translator';
 
+// JWT
+import { JwtStrategy } from './strategies/jwt.strategy';
+
 @Module({
   imports: [
+    ConfigModule,
+    HttpModule,
     SqlParserModule,
-    ConfigModule.forRoot({
-      isGlobal: true,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET', 'default_secret_change_this_in_production'),
+        signOptions: { expiresIn: '15m' },
+      }),
     }),
-    CassandraModule
+  ],
+  controllers: [
+    TranslatorController  // El controlador que usa ResponseFormatterService
   ],
   providers: [
+    JwtStrategy,
     TranslatorService,
-    ValidationService,
+    CassandraService,
+    PermissionsApiService,
+    PermissionCacheService,
+    ResponseFormatterService, // Añadimos el nuevo servicio aquí
     DatabaseTranslator,
     TableTranslator,
+    IndexTranslator,
+    ViewTranslator,
     SelectTranslator,
     InsertTranslator,
     UpdateTranslator,
     DeleteTranslator,
-    IndexTranslator,
-    ViewTranslator,
     OperatorsTranslator,
-    ExecutionTranslator
+    ExecutionTranslator,
   ],
-  exports: [TranslatorService, ValidationService]
+  exports: [
+    TranslatorService,
+    CassandraService,
+    PermissionsApiService,
+    PermissionCacheService,
+    ResponseFormatterService, // Lo exportamos también por si otro módulo lo necesita
+    JwtModule,
+    PassportModule
+  ],
 })
 export class TranslatorModule {}

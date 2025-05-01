@@ -129,10 +129,10 @@ export class TranslatorService implements OnModuleInit {
   /**
    * Traduce y opcionalmente ejecuta una sentencia SQL en Cassandra
    * @param sql Sentencia SQL a traducir
-   * @param options Opciones de traducción y ejecución
+   * @param options Opciones de traducción y ejecución (incluye token y usuario)
    * @returns Resultado de la traducción y ejecución
    */
-  async translateAndExecute(sql: string, options: TranslationOptions = {}): Promise<SqlToCqlResult> {
+  async translateAndExecute(sql: string, options: TranslationOptions & { token?: string, user?: any } = {}): Promise<SqlToCqlResult> {
     // Primero traducir
     const translationResult = this.translateSQL(sql, options);
     
@@ -145,7 +145,10 @@ export class TranslatorService implements OnModuleInit {
     
     try {
       // Ejecutar la consulta CQL en Cassandra
-      const executionResult = await this.executionTranslator.execute(translationResult.cql);
+      const executionResult = await this.executionTranslator.execute(translationResult.cql, {
+        token: options.token,
+        user: options.user
+      });
       
       return {
         ...translationResult,
@@ -171,11 +174,12 @@ export class TranslatorService implements OnModuleInit {
   /**
    * Ejecuta directamente una consulta CQL en Cassandra
    * @param cql Consulta CQL a ejecutar
+   * @param options Opciones adicionales (token y usuario)
    * @returns Resultado de la ejecución
    */
-  async executeCQL(cql: string): Promise<any> {
+  async executeCQL(cql: string, options: { token?: string, user?: any } = {}): Promise<any> {
     try {
-      const executionResult = await this.executionTranslator.execute(cql);
+      const executionResult = await this.executionTranslator.execute(cql, options);
       return {
         success: executionResult.success,
         result: executionResult.result,
