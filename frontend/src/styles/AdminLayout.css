@@ -1,0 +1,353 @@
+/* src/styles/AdminLayout.css */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Libre Baskerville', serif;
+}
+
+html, body, #root, .App {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.admin-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Sidebar estilo */
+.admin-sidebar {
+  width: 280px;
+  background-color: #3c4045; /* Gris oscuro */
+  color: white;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.admin-logo {
+  font-size: 3rem;
+  font-weight: bold;
+  padding: 1.8rem 0;
+  text-align: center;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.admin-menu {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.admin-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 1.2rem 1.8rem;
+  cursor: pointer;
+  font-size: 1.3rem;
+  color: white;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.admin-menu-item:hover {
+  background-color: #1797DC; /* Color azul para hover */
+}
+
+.admin-menu-item.active {
+  background-color: #1797DC; /* También azul para el elemento activo */
+  font-weight: bold;
+}
+
+.admin-menu-icon {
+  margin-right: 1.2rem;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  width: 26px;
+  justify-content: center;
+}
+
+.admin-logout {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  padding: 1.2rem 1.8rem;
+  cursor: pointer;
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+  transition: all 0.2s ease;
+}
+
+.admin-logout:hover {
+  background-color: #1797DC; /* Color azul para hover */
+}
+
+/* Contenido principal */
+.admin-main {
+  flex: 1;
+  background-color: #747474; /* Gris medio */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Barra superior */
+.admin-topbar {
+  display: flex;
+  justify-content: flex-end; /* Alinea el usuario a la derecha */
+  align-items: center;
+  padding: 1.2rem 2.5rem;
+  background-color: #747474; /* Gris medio */
+  height: 80px;
+}
+
+.admin-search {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 5px;
+  padding: 0.5rem 0.8rem;
+  width: 320px;
+}
+
+.admin-search-input {
+  border: none;
+  outline: none;
+  padding: 0.6rem;
+  width: 100%;
+  font-size: 1.2rem;
+}
+
+.admin-search-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  color: #333;
+}
+
+.admin-user {
+  display: flex;
+  align-items: center;
+  color: white;
+  font-size: 1.4rem;
+}
+
+.admin-user-icon {
+  margin-left: 1rem;
+  font-size: 2.5rem;
+}
+
+/* Contenido específico de la página */
+.admin-content {
+  flex: 1;
+  padding: 1.8rem 2.5rem;
+  overflow-y: auto;
+}
+
+/* Panel de contenido */
+.admin-panel {
+  background-color: #4e5359; /* Gris oscuro para los paneles */
+  border: none;
+  border-radius: 18px;
+  padding: 2.5rem;
+  margin-bottom: 2.5rem;
+  color: white;
+  max-width: 1400px; /* Limitar el ancho máximo para mejor legibilidad */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.admin-panel-title {
+  font-size: 2.2rem;
+  font-weight: normal;
+  margin-bottom: 2rem;
+  color: white;
+}
+
+/* Form controls */
+.admin-form-group {
+  margin-bottom: 2rem;
+}
+
+.admin-form-row {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.admin-form-column {
+  flex: 1;
+}
+
+.admin-label {
+  display: block;
+  margin-bottom: 0.8rem;
+  font-size: 1.4rem;
+}
+
+.admin-input {
+  width: 100%;
+  padding: 1rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.3rem;
+  background-color: white;
+  color: #333;
+  height: 3.6rem;
+}
+
+.admin-button {
+  background-color: white;
+  color: #333;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 30px;
+  font-size: 1.4rem;
+  cursor: pointer;
+  min-width: 160px;
+  display: inline-block;
+  text-align: center;
+  transition: all 0.3s ease;
+  height: 3.6rem;
+}
+
+.admin-button:hover {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+/* Switch toggle */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+
+.toggle-label {
+  font-size: 1.2rem;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 56px;
+  height: 28px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 28px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #3498db;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(28px);
+}
+
+/* Scroll personalizado */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .admin-sidebar {
+    width: 250px;
+  }
+  
+  .admin-logo {
+    font-size: 2.5rem;
+  }
+  
+  .admin-form-row {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .admin-panel {
+    padding: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-container {
+    flex-direction: column;
+  }
+  
+  .admin-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+  }
+  
+  .admin-main {
+    height: calc(100% - 300px);
+  }
+  
+  .admin-topbar {
+    padding: 1rem 1.5rem;
+  }
+  
+  .admin-content {
+    padding: 1.5rem;
+  }
+  
+  .admin-panel {
+    padding: 1.5rem;
+  }
+}

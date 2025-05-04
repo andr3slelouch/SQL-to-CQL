@@ -5,7 +5,18 @@ import LoginPage from './components/LoginPage';
 import TranslatorPage from './components/TranslatorPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
+
+// Páginas de administrador
+import AdminTranslatorPage from './pages/AdminTranslatorPage';
+import GeneratePinPage from './pages/GeneratePinPage';
+import DeleteUserPage from './pages/DeleteUserPage';
+import AssignDatabasesPage from './pages/AssignDatabasesPage';
+import ConfigurePermissionsPage from './pages/ConfigurePermissionsPage';
+
+// Estilos
 import './styles/LoginPage.css';
+import './styles/AdminLayout.css';
+import './styles/AdminTranslatorPage.css';
 
 const App: React.FC = () => {
   return (
@@ -15,10 +26,19 @@ const App: React.FC = () => {
           <Routes>
             {/* Ruta pública: Login */}
             <Route path="/" element={<LoginPage />} />
+            <Route path="/login" element={<LoginPage />} />
             
             {/* Rutas protegidas */}
             <Route element={<ProtectedRoute />}>
+              {/* Rutas de usuario */}
               <Route path="/translator" element={<TranslatorPage />} />
+              
+              {/* Rutas de administrador */}
+              <Route path="/admin/translator" element={<AdminTranslatorPage />} />
+              <Route path="/admin/generar-pin" element={<GeneratePinPage />} />
+              <Route path="/admin/eliminar-usuario" element={<DeleteUserPage />} />
+              <Route path="/admin/asignar-bases" element={<AssignDatabasesPage />} />
+              <Route path="/admin/configurar-permisos" element={<ConfigurePermissionsPage />} />
             </Route>
             
             {/* Redirección para rutas no encontradas */}

@@ -5,7 +5,7 @@ interface RequestOptions {
   method?: string;
   headers?: Record<string, string>;
   body?: any;
-  service?: 'auth' | 'permissions'; // Para identificar a qué servicio hacer la petición
+  service?: 'auth' | 'permissions' | 'translator'; // Añadido 'translator'
 }
 
 class HttpService {
@@ -14,8 +14,9 @@ class HttpService {
   constructor() {
     // Configuración de URLs base para cada microservicio
     this.baseUrls = {
-      auth: 'http://localhost:3001/api',      // Servicio de autenticación
-      permissions: 'http://localhost:3002/api' // Servicio de permisos
+      auth: 'http://localhost:3001/api', // Servicio de autenticación
+      permissions: 'http://localhost:3002/api', // Servicio de permisos
+      translator: 'http://localhost:3000/api' // Servicio de traducción
     };
   }
 
@@ -27,35 +28,39 @@ class HttpService {
 
   // Método genérico para realizar solicitudes HTTP
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    // Determinar qué servicio usar (por defecto, auth)
-    const service = options.service || 'auth';
+    // Determinar qué servicio usar (por defecto, translator)
+    const service = options.service || 'translator';
+    // Construir la URL correcta para el servicio
     const url = `${this.baseUrls[service]}${endpoint}`;
     
+    console.log(`Servicio seleccionado: ${service}`);
+    console.log(`URL completa: ${url}`);
+
     // Configurar encabezados predeterminados
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.getAuthHeaders(),
       ...(options.headers || {})
     };
-    
+
     // Preparar el cuerpo de la solicitud si existe
     let body;
     if (options.body) {
       body = JSON.stringify(options.body);
     }
-    
+
     // Configurar opciones de la solicitud
     const requestOptions: RequestInit = {
       method: options.method || 'GET',
       headers,
       body,
-      credentials: 'include'  // Para soportar cookies si se utilizan
+      credentials: 'include' // Para soportar cookies si se utilizan
     };
-    
+
     try {
       console.log(`Realizando petición a: ${url}`);
       const response = await fetch(url, requestOptions);
-      
+
       // Manejar errores de respuesta HTTP
       if (!response.ok) {
         if (response.status === 401) {
@@ -63,13 +68,12 @@ class HttpService {
           AuthService.logout();
           throw new Error('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
         }
-        
         // Intentar obtener detalles del error desde la respuesta
         const errorData = await response.json().catch(() => null);
         const errorMessage = errorData?.message || `Error ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
-      
+
       // Verificar si la respuesta contiene datos JSON
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -78,7 +82,6 @@ class HttpService {
       
       // Si no es JSON, devolver la respuesta como texto
       return await response.text() as unknown as T;
-      
     } catch (error) {
       // Re-lanzar el error para que lo maneje el componente
       throw error;

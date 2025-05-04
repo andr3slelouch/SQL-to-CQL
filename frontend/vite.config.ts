@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      // Proxy para el servicio de traducción
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
       // Proxy para el servicio de autenticación
       '/api-auth': {
         target: 'http://localhost:3001',

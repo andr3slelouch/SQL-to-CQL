@@ -1,11 +1,10 @@
-// src/components/TranslatorPage.tsx
+// src/pages/AdminTranslatorPage.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaArrowsAltH, FaSignOutAlt, FaUserCircle, FaCopy, FaPlay, FaSpinner } from 'react-icons/fa';
+import { FaCopy, FaPlay, FaSpinner } from 'react-icons/fa';
+import AdminLayout from '../components/layouts/AdminLayout';
 import KeyspaceService from '../services/KeyspaceService';
-import AuthService from '../services/AuthService';
 import HttpService from '../services/HttpService';
-import '../styles/TranslatorPage.css';
+import '../styles/AdminTranslatorPage.css';
 
 // Definir interfaces para las respuestas del API
 interface ExecuteResponse {
@@ -39,8 +38,7 @@ interface ExecuteResponse {
   };
 }
 
-const TranslatorPage: React.FC = () => {
-  const navigate = useNavigate();
+const AdminTranslatorPage: React.FC = () => {
   const [selectedDatabase, setSelectedDatabase] = useState<string>('');
   const [tables, setTables] = useState<string[]>([]);
   const [sqlQuery, setSqlQuery] = useState('');
@@ -244,11 +242,6 @@ const TranslatorPage: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    AuthService.logout();
-    navigate('/login');
-  };
-
   const copyToClipboard = () => {
     navigator.clipboard.writeText(cqlQuery);
     setShowTooltip(true);
@@ -260,151 +253,124 @@ const TranslatorPage: React.FC = () => {
   };
 
   return (
-    <div className="translator-container">
-      {/* Sidebar izquierdo */}
-      <div className="sidebar">
-        <div className="logo">CASSQL</div>
-        <div className="menu-item active">
-          <FaArrowsAltH className="menu-icon" />
-          <span>Traductor</span>
-        </div>
-        <div className="logout-button" onClick={handleLogout}>
-          <FaSignOutAlt className="menu-icon" />
-          <span>Salir</span>
-        </div>
-      </div>
-      
-      {/* Contenido principal */}
-      <div className="main-content">
-        {/* Barra superior con usuario */}
-        <div className="top-bar">
-          <div className="user-info">
-            <span>{AuthService.getCurrentUser()?.nombre || 'Usuario'}</span>
-            <FaUserCircle className="user-icon" />
+    <AdminLayout>
+      <div className="admin-panel translator-panel">
+        {error && <div className="error-message">{error}</div>}
+        <div className="database-selector">
+          <div className="select-container">
+            {/* Indicador de carga para el selector de bases de datos */}
+            {isLoadingDatabases ? (
+              <div className="loading-indicator">
+                <FaSpinner className="spinner-icon" />
+                <span>Cargando bases de datos...</span>
+              </div>
+            ) : (
+              /* Select funcional que envía USE la primera vez */
+              <select
+                id="database-select"
+                name="database-select"
+                className="database-select admin-input"
+                value={selectedDatabase}
+                onChange={handleDatabaseChange}
+                disabled={isExecuting}
+              >
+                {databases.length === 0 ? (
+                  <option value="">No hay bases de datos disponibles</option>
+                ) : (
+                  <>
+                    <option value="" disabled>Seleccionar base de datos</option>
+                    {databases.map((db, index) => (
+                      <option key={index} value={db}>{db}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+            )}
+          </div>
+          <div className="select-container">
+            <div className="readonly-select">
+              <span className={tables.length === 0 ? "placeholder" : ""}>
+                {tables.length > 0 ? tables.join(", ") : "Tablas"}
+              </span>
+            </div>
           </div>
         </div>
         
-        {/* Área de trabajo */}
-        <div className="work-area">
-          {/* Sección de consulta */}
-          <div className="query-section">
-            {error && <div className="error-message">{error}</div>}
-            <div className="database-selector">
-              <div className="select-container">
-                {/* Indicador de carga para el selector de bases de datos */}
-                {isLoadingDatabases ? (
-                  <div className="loading-indicator">
-                    <FaSpinner className="spinner-icon" />
-                    <span>Cargando bases de datos...</span>
-                  </div>
-                ) : (
-                  /* Select funcional que envía USE la primera vez */
-                  <select
-                    id="database-select"
-                    name="database-select"
-                    className="database-select"
-                    value={selectedDatabase}
-                    onChange={handleDatabaseChange}
-                    disabled={isExecuting}
-                  >
-                    {databases.length === 0 ? (
-                      <option value="">No hay bases de datos disponibles</option>
-                    ) : (
-                      <>
-                        <option value="" disabled>Seleccionar base de datos</option>
-                        {databases.map((db, index) => (
-                          <option key={index} value={db}>{db}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                )}
-              </div>
-              <div className="select-container">
-                <div className="readonly-select">
-                  <span className={tables.length === 0 ? "placeholder" : ""}>
-                    {tables.length > 0 ? tables.join(", ") : "Tablas"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="query-editors">
-              <div className="editor-container">
-                <h3>SQL</h3>
-                <textarea
-                  className="query-editor"
-                  value={sqlQuery}
-                  onChange={(e) => setSqlQuery(e.target.value)}
-                  placeholder={isLoadingDatabases
-                    ? "Cargando bases de datos..."
-                    : "Escribe tu consulta SQL aquí..."}
-                  disabled={isLoadingDatabases || isExecuting}
-                />
-              </div>
-              <div className="editor-container">
-                <h3>CQL</h3>
-                <div className="cql-container">
-                  <textarea
-                    className="query-editor"
-                    value={cqlQuery}
-                    placeholder="Resultado de la traducción a CQL..."
-                    readOnly
-                  />
-                  <button className="copy-button" onClick={copyToClipboard} disabled={!cqlQuery}>
-                    <FaCopy />
-                  </button>
-                  <div className={`copy-tooltip ${showTooltip ? 'show' : ''}`}>
-                    Copiado al portapapeles
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="execute-button-container">
-              <button
-                className="execute-button"
-                onClick={handleExecute}
-                disabled={isLoadingDatabases || !sqlQuery.trim() || isExecuting}
-              >
-                <span>{isExecuting ? 'Ejecutando...' : 'Ejecutar'}</span>
-                {isExecuting ? <FaSpinner className="execute-icon spinner-icon" /> : <FaPlay className="execute-icon" />}
-              </button>
-            </div>
+        <div className="query-editors">
+          <div className="editor-container">
+            <h3>SQL</h3>
+            <textarea
+              className="query-editor"
+              value={sqlQuery}
+              onChange={(e) => setSqlQuery(e.target.value)}
+              placeholder={isLoadingDatabases
+                ? "Cargando bases de datos..."
+                : "Escribe tu consulta SQL aquí..."}
+              disabled={isLoadingDatabases || isExecuting}
+            />
           </div>
-          
-          {/* Sección de resultados */}
-          <div className="results-section">
-            <h3>Resultado</h3>
-            <div className="results-table">
-              {results.length > 0 ? (
-                <table>
-                  <thead>
-                    <tr>
-                      {columns.map((column, index) => (
-                        <th key={index}>{column}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {columns.map((column, colIndex) => (
-                          <td key={colIndex}>{row[column] !== undefined ? String(row[column]) : ''}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="no-results">
-                  No hay resultados para mostrar.
-                </div>
-              )}
+          <div className="editor-container">
+            <h3>CQL</h3>
+            <div className="cql-container">
+              <textarea
+                className="query-editor"
+                value={cqlQuery}
+                placeholder="Resultado de la traducción a CQL..."
+                readOnly
+              />
+              <button className="copy-button" onClick={copyToClipboard} disabled={!cqlQuery}>
+                <FaCopy />
+              </button>
+              <div className={`copy-tooltip ${showTooltip ? 'show' : ''}`}>
+                Copiado al portapapeles
+              </div>
             </div>
           </div>
         </div>
+        
+        <div className="execute-button-container">
+          <button
+            className="admin-button execute-button"
+            onClick={handleExecute}
+            disabled={isLoadingDatabases || !sqlQuery.trim() || isExecuting}
+          >
+            <span>{isExecuting ? 'Ejecutando...' : 'Ejecutar'}</span>
+            {isExecuting ? <FaSpinner className="execute-icon spinner-icon" /> : <FaPlay className="execute-icon" />}
+          </button>
+        </div>
       </div>
-    </div>
+      
+      <div className="admin-panel results-panel">
+        <h3 className="admin-panel-title">Resultado</h3>
+        <div className="results-table">
+          {results.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((column, index) => (
+                    <th key={index}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {columns.map((column, colIndex) => (
+                      <td key={colIndex}>{row[column] !== undefined ? String(row[column]) : ''}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="no-results">
+              No hay resultados para mostrar.
+            </div>
+          )}
+        </div>
+      </div>
+    </AdminLayout>
   );
 };
 
-export default TranslatorPage;
+export default AdminTranslatorPage;
