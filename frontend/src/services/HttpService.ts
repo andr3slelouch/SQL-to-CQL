@@ -5,7 +5,7 @@ interface RequestOptions {
   method?: string;
   headers?: Record<string, string>;
   body?: any;
-  service?: 'auth' | 'permissions' | 'translator'; // Añadido 'translator'
+  service?: 'auth' | 'permissions' | 'translator'; // Servicios disponibles
 }
 
 class HttpService {
@@ -14,15 +14,20 @@ class HttpService {
   constructor() {
     // Configuración de URLs base para cada microservicio
     this.baseUrls = {
-      auth: 'http://localhost:3001/api', // Servicio de autenticación
-      permissions: 'http://localhost:3002/api', // Servicio de permisos
-      translator: 'http://localhost:3000/api' // Servicio de traducción
+      auth: 'http://localhost:3001/api',         // Servicio de autenticación
+      permissions: 'http://localhost:3002/api',  // Servicio de permisos
+      translator: 'http://localhost:3000/api'    // Servicio de traducción
     };
   }
 
   // Método privado para agregar encabezados de autenticación
   private getAuthHeaders(): Record<string, string> {
     const token = AuthService.getAccessToken();
+    if (!token) {
+      console.warn('No se encontró token de autenticación');
+    } else {
+      console.log('Token de autenticación encontrado');
+    }
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   }
 
@@ -47,6 +52,7 @@ class HttpService {
     let body;
     if (options.body) {
       body = JSON.stringify(options.body);
+      console.log('Cuerpo de la petición:', options.body);
     }
 
     // Configurar opciones de la solicitud
@@ -65,11 +71,14 @@ class HttpService {
       if (!response.ok) {
         if (response.status === 401) {
           // Token expirado o inválido
+          console.error('Error 401: Token inválido o sesión expirada');
           AuthService.logout();
           throw new Error('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
         }
+        
         // Intentar obtener detalles del error desde la respuesta
         const errorData = await response.json().catch(() => null);
+        console.error('Error en la respuesta:', errorData);
         const errorMessage = errorData?.message || `Error ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
@@ -77,11 +86,15 @@ class HttpService {
       // Verificar si la respuesta contiene datos JSON
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        return await response.json() as T;
+        const jsonResponse = await response.json();
+        console.log('Respuesta JSON:', jsonResponse);
+        return jsonResponse as T;
       }
       
       // Si no es JSON, devolver la respuesta como texto
-      return await response.text() as unknown as T;
+      const textResponse = await response.text();
+      console.log('Respuesta texto:', textResponse);
+      return textResponse as unknown as T;
     } catch (error) {
       // Re-lanzar el error para que lo maneje el componente
       throw error;

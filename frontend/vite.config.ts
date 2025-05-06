@@ -8,21 +8,24 @@ export default defineConfig({
   server: {
     proxy: {
       // Proxy para el servicio de traducción
-      '/api': {
+      '/api/translator': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
       // Proxy para el servicio de autenticación
-      '/api-auth': {
+      '/api/auth': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-auth/, '/api'),
       },
-      // Proxy para el servicio de permisos
-      '/api-permissions': {
+      // Proxy para el servicio de permisos - asegurando que vaya al puerto 3002
+      '/api/admin/permissions': {
         target: 'http://localhost:3002',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-permissions/, '/api'),
+      },
+      // Ruta de fallback para el resto de endpoints del servicio de permisos
+      '/api/admin': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
       },
     },
   },
