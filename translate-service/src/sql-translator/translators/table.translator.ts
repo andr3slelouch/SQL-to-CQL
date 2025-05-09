@@ -38,6 +38,13 @@ export class TableTranslator implements Translator {
     // Imprimimos la estructura del AST para depuración
     this.logger.debug(`Verificando si TableTranslator puede manejar AST: ${JSON.stringify(ast)}`);
     
+    // NUEVO: Manejo específico para DESCRIBE TABLE
+    if ((ast.type === 'desc' || ast.type === 'describe') && 
+        ast.sourceText && ast.sourceText.toUpperCase().includes('TABLE')) {
+      this.logger.debug('TableTranslator identificó DESCRIBE TABLE por texto original');
+      return true;
+    }
+    
     // Caso especial para ALTER TABLE - node-sql-parser no establece keyword para ALTER
     if (ast.type === 'alter' && ast.table && Array.isArray(ast.table) && ast.table.length > 0 && ast.table[0].table) {
       this.logger.debug('TableTranslator identificó ALTER TABLE por structure');
@@ -51,7 +58,10 @@ export class TableTranslator implements Translator {
       (ast.type === 'drop' && ast.keyword === 'table') ||
       (ast.type === 'truncate') ||
       (ast.type === 'show' && ast.keyword === 'tables') ||
-      (ast.type === 'show' && ast.keyword === 'columns')
+      (ast.type === 'show' && ast.keyword === 'columns') ||
+      // Añadir soporte para tipo 'desc' (describe)
+      (ast.type === 'desc') ||
+      (ast.type === 'describe')
     );
     
     if (canHandle) {
@@ -72,6 +82,21 @@ export class TableTranslator implements Translator {
     }
     
     try {
+      // NUEVO: Manejo especial para DESCRIBE TABLE nombreTabla
+      if ((ast.type === 'desc' || ast.type === 'describe') && 
+          ast.sourceText && ast.sourceText.toUpperCase().includes('TABLE')) {
+        // Intentar extraer el nombre de la tabla del texto SQL original
+        const sqlUpper = ast.sourceText.toUpperCase();
+        if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+          const prefix = sqlUpper.startsWith('DESCRIBE TABLE ') ? 'DESCRIBE TABLE ' : 'DESC TABLE ';
+          const tableName = ast.sourceText.substring(prefix.length).trim();
+          if (tableName) {
+            this.logger.debug(`Extrayendo nombre de tabla de texto original para DESCRIBE TABLE: ${tableName}`);
+            return `DESCRIBE TABLE ${tableName}`;
+          }
+        }
+      }
+      
       switch (ast.type) {
         case 'create':
           return this.translateCreateTable(ast);
@@ -88,6 +113,10 @@ export class TableTranslator implements Translator {
             return this.translateShowColumns(ast);
           }
           return this.createUnsupportedComment('SHOW', ast.keyword || 'unknown');
+        // Añadir traducción para DESC/DESCRIBE
+        case 'desc':
+        case 'describe':
+          return this.translateDescTable(ast);
         default:
           return this.createUnsupportedComment(ast.type, 'unknown');
       }
@@ -95,6 +124,68 @@ export class TableTranslator implements Translator {
       this.logger.error(`Error al traducir operación de tabla: ${error.message}`);
       return this.createErrorComment(error.message);
     }
+  }
+  
+  /**
+   * Traduce una sentencia DESC/DESCRIBE a CQL
+   * @param ast AST de la sentencia DESC/DESCRIBE
+   * @returns Sentencia CQL equivalente
+   */
+  private translateDescTable(ast: any): string {
+    this.logger.debug(`Traduciendo DESC/DESCRIBE. AST: ${JSON.stringify(ast)}`);
+    
+    // NUEVO: Procesamiento del texto SQL original para DESCRIBE TABLE
+    if (ast.sourceText) {
+      const sqlUpper = ast.sourceText.toUpperCase();
+      
+      // Detectar DESCRIBE TABLE nombreTabla
+      if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+        const prefix = sqlUpper.startsWith('DESCRIBE TABLE ') ? 'DESCRIBE TABLE ' : 'DESC TABLE ';
+        const tableName = ast.sourceText.substring(prefix.length).trim();
+        if (tableName) {
+          this.logger.debug(`Extrayendo nombre de tabla de texto original para DESCRIBE TABLE: ${tableName}`);
+          return `DESCRIBE TABLE ${tableName}`;
+        }
+      }
+      
+      // Detectar DESCRIBE KEYSPACES/DATABASES
+      if (sqlUpper.includes('KEYSPACES') || sqlUpper.includes('DATABASES') || sqlUpper.includes('SCHEMAS')) {
+        this.logger.debug(`Detectado DESCRIBE KEYSPACES/DATABASES/SCHEMAS por texto SQL`);
+        return 'DESCRIBE KEYSPACES';
+      }
+      
+      // Detectar DESCRIBE TABLES
+      if (sqlUpper.includes('TABLES')) {
+        this.logger.debug(`Detectado DESCRIBE TABLES por texto SQL`);
+        return 'DESCRIBE TABLES';
+      }
+    }
+    
+    // Si el valor de table es 'keyspaces', es DESCRIBE KEYSPACES
+    if (ast.table === 'keyspaces' || 
+        (typeof ast.table === 'object' && ast.table && ast.table.table === 'keyspaces')) {
+      this.logger.debug(`Detectado DESCRIBE KEYSPACES`);
+      return 'DESCRIBE KEYSPACES';
+    }
+    
+    // Si el valor de table es 'tables', es DESCRIBE TABLES
+    if (ast.table === 'tables' || 
+        (typeof ast.table === 'object' && ast.table && ast.table.table === 'tables')) {
+      this.logger.debug(`Detectado DESCRIBE TABLES`);
+      return 'DESCRIBE TABLES';
+    }
+    
+    // Si hay un nombre de tabla específico, es DESCRIBE TABLE nombre_tabla
+    if (ast.table && typeof ast.table === 'string' && 
+        ast.table !== 'tables' && ast.table !== 'keyspaces') {
+      this.logger.debug(`Detectado DESCRIBE TABLE para tabla específica: ${ast.table}`);
+      return `DESCRIBE TABLE ${ast.table}`;
+    }
+    
+    // Si no hay suficiente información, asumir DESCRIBE TABLES
+    this.logger.warn(`No se pudo determinar tipo específico de DESC: ${JSON.stringify(ast)}`);
+    this.logger.debug(`No se pudo determinar tipo específico de DESC, usando DESCRIBE TABLES por defecto`);
+    return 'DESCRIBE TABLES';
   }
   
   /**

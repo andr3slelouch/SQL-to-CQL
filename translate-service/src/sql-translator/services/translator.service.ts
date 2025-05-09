@@ -60,6 +60,35 @@ export class TranslatorService implements OnModuleInit {
   }
 
   /**
+   * MÉTODO AUXILIAR: Procesa la sentencia SQL para casos especiales
+   * @param sql Sentencia SQL original
+   * @returns Sentencia SQL procesada o la original si no requiere procesamiento
+   */
+  private procesarSentenciaEspecial(sql: string): string | null {
+    const sqlTrim = sql.trim();
+    const sqlUpper = sqlTrim.toUpperCase();
+    
+    // Caso especial: DESCRIBE TABLE nombreTabla
+    if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+      const prefix = sqlUpper.startsWith('DESCRIBE TABLE ') ? 'DESCRIBE TABLE ' : 'DESC TABLE ';
+      const tableName = sqlTrim.substring(prefix.length).trim();
+      if (tableName) {
+        this.logger.log(`Detectado comando DESCRIBE TABLE para tabla: ${tableName}`);
+        return `DESCRIBE TABLE ${tableName}`;
+      }
+    }
+    
+    // Caso especial: SHOW DATABASES/SCHEMAS
+    if (sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS') {
+      this.logger.log(`Detectado comando SHOW DATABASES/SCHEMAS, traduciendo a DESCRIBE KEYSPACES`);
+      return 'DESCRIBE KEYSPACES';
+    }
+    
+    // No es un caso especial, devolver null para indicar que se debe procesar normalmente
+    return null;
+  }
+
+  /**
    * Traduce una sentencia SQL a CQL
    * @param sql Sentencia SQL a traducir
    * @param options Opciones de traducción
@@ -67,10 +96,33 @@ export class TranslatorService implements OnModuleInit {
    */
   translateSQL(sql: string, options: TranslationOptions = {}): SqlToCqlResult {
     try {
+      // NUEVO: Procesamiento especial para comandos problemáticos
+      const sentenciaEspecial = this.procesarSentenciaEspecial(sql);
+      if (sentenciaEspecial) {
+        this.logger.log(`Usando traducción especial para: "${sql}" -> "${sentenciaEspecial}"`);
+        return {
+          success: true,
+          cql: sentenciaEspecial
+        };
+      }
+      
       // Parsear la sentencia SQL
       const parseResult = this.sqlParserService.parseSQL(sql);
       
       if (!parseResult.success) {
+        // NUEVO: Intentar manejar casos de error específicos
+        if (sql.toUpperCase().startsWith('DESCRIBE TABLE') || sql.toUpperCase().startsWith('DESC TABLE')) {
+          const parts = sql.split(' ');
+          if (parts.length >= 3) {
+            const tableName = parts.slice(2).join(' ').trim();
+            this.logger.log(`Recuperando de error de parsing para DESCRIBE TABLE: ${tableName}`);
+            return {
+              success: true,
+              cql: `DESCRIBE TABLE ${tableName}`
+            };
+          }
+        }
+        
         return {
           success: false,
           error: `Error de sintaxis SQL: ${parseResult.error}`
@@ -133,6 +185,13 @@ export class TranslatorService implements OnModuleInit {
    * @returns Resultado de la traducción y ejecución
    */
   async translateAndExecute(sql: string, options: TranslationOptions & { token?: string, user?: any } = {}): Promise<SqlToCqlResult> {
+    // NUEVO: Procesar la sentencia SQL para casos especiales
+    const sentenciaEspecial = this.procesarSentenciaEspecial(sql);
+    if (sentenciaEspecial) {
+      this.logger.log(`Usando sentencia especial para ejecución: "${sql}" -> "${sentenciaEspecial}"`);
+      sql = sentenciaEspecial;
+    }
+    
     // Primero traducir
     const translationResult = this.translateSQL(sql, options);
     

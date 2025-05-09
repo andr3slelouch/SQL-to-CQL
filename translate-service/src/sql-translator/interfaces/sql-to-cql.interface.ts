@@ -2,18 +2,19 @@ export interface SqlToCqlResult {
   success: boolean;
   cql?: string;
   error?: string;
-  message?: string; // Nuevo campo para mensajes personalizados
-  executionResult?: {
-    success: boolean;
-    data?: any;
-    error?: string;
+  message?: string;
+  executionResult?: any;
+  copyableCqlQuery?: {
+    query: string;
+    description: string;
   };
 }
 
 export interface TranslationOptions {
   validateOnly?: boolean;
   throwOnError?: boolean;
-  executeInCassandra?: boolean;
-  token?: string;
-  user?: any;
+  targetVersion?: string;
+  executeInCassandra?: boolean;  // Añadido esta propiedad
+  token?: string;                // Añadido esta propiedad
+  user?: any;                    // Añadido esta propiedad
 }

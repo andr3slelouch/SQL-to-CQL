@@ -14,14 +14,28 @@ export class DatabaseTranslator implements Translator {
   canHandle(ast: any): boolean {
     if (!ast) return false;
     
-    // Operaciones de base de datos
-    return (
-      (ast.type === 'create' && ast.keyword === 'database') ||
-      (ast.type === 'alter' && ast.keyword === 'database') ||
-      (ast.type === 'drop' && ast.keyword === 'database') ||
-      (ast.type === 'show' && ast.keyword === 'databases') ||
+    // Operaciones de base de datos - MODIFICADO para soportar más variantes
+    const result = (
+      (ast.type === 'create' && (ast.keyword === 'database' || ast.keyword === 'schema' || ast.keyword === 'keyspace')) ||
+      (ast.type === 'alter' && (ast.keyword === 'database' || ast.keyword === 'schema' || ast.keyword === 'keyspace')) ||
+      (ast.type === 'drop' && (ast.keyword === 'database' || ast.keyword === 'schema' || ast.keyword === 'keyspace')) ||
+      // Añadir soporte para SHOW DATABASES con diferentes posibles estructuras
+      (ast.type === 'show' && (ast.keyword === 'databases' || ast.keyword === 'schemas')) ||
+      (ast.type === 'show' && (ast.target === 'databases' || ast.target === 'schemas')) ||
+      (ast.type === 'show' && (ast.table === 'databases' || ast.table === 'schemas')) ||
+      // Soporte para DESCRIBE KEYSPACES/DATABASES
+      (ast.type === 'desc' && (ast.table === 'databases' || ast.table === 'schemas' || ast.table === 'keyspaces')) ||
+      (ast.type === 'describe' && (ast.table === 'databases' || ast.table === 'schemas' || ast.table === 'keyspaces')) ||
+      // Para sentencias USE DATABASE/KEYSPACE
       (ast.type === 'use')
     );
+    
+    // Añadir log para depuración
+    if (result) {
+      this.logger.log(`DatabaseTranslator puede manejar AST: ${JSON.stringify(ast)}`);
+    }
+    
+    return result;
   }
 
   /**
@@ -35,6 +49,9 @@ export class DatabaseTranslator implements Translator {
     }
     
     try {
+      // Verificar si la sentencia SQL original está disponible para más contexto
+      const sqlOriginal = ast.sourceText ? ast.sourceText.toUpperCase() : '';
+      
       switch (ast.type) {
         case 'create':
           return this.translateCreateDatabase(ast);
@@ -43,7 +60,37 @@ export class DatabaseTranslator implements Translator {
         case 'drop':
           return this.translateDropDatabase(ast);
         case 'show':
-          return this.translateShowDatabases(ast);
+          // SHOW DATABASES/SCHEMAS -> DESCRIBE KEYSPACES
+          if (ast.keyword === 'databases' || 
+              ast.keyword === 'schemas' || 
+              ast.target === 'databases' || 
+              ast.target === 'schemas' || 
+              ast.table === 'databases' || 
+              ast.table === 'schemas' ||
+              sqlOriginal.includes('SHOW DATABASES') ||
+              sqlOriginal.includes('SHOW SCHEMAS')) {
+            this.logger.log(`Traduciendo SHOW DATABASES/SCHEMAS a DESCRIBE KEYSPACES`);
+            return this.translateShowDatabases(ast);
+          }
+          // Añadir un return por defecto para asegurar que siempre haya un valor de retorno
+          return this.createErrorComment(`Operación no soportada: ${ast.type} ${ast.keyword || ast.table || ''}`);
+        case 'desc':
+        case 'describe':
+          // DESC/DESCRIBE KEYSPACES/DATABASES -> DESCRIBE KEYSPACES
+          if (ast.table === 'databases' || 
+              ast.table === 'schemas' || 
+              ast.table === 'keyspaces' ||
+              sqlOriginal.includes('DESC KEYSPACES') ||
+              sqlOriginal.includes('DESCRIBE KEYSPACES') ||
+              sqlOriginal.includes('DESC DATABASES') ||
+              sqlOriginal.includes('DESCRIBE DATABASES') ||
+              sqlOriginal.includes('DESC SCHEMAS') ||
+              sqlOriginal.includes('DESCRIBE SCHEMAS')) {
+            this.logger.log(`Traduciendo DESC/DESCRIBE KEYSPACES/DATABASES a DESCRIBE KEYSPACES`);
+            return 'DESCRIBE KEYSPACES';
+          }
+          // Añadir un return por defecto para asegurar que siempre haya un valor de retorno
+          return this.createErrorComment(`Operación no soportada: ${ast.type} ${ast.keyword || ast.table || ''}`);
         case 'use':
           return this.translateUseDatabase(ast);
         default:
@@ -158,6 +205,7 @@ export class DatabaseTranslator implements Translator {
    * @returns Sentencia CQL equivalente
    */
   private translateShowDatabases(ast: any): string {
+    this.logger.log('Traduciendo SHOW DATABASES/SCHEMAS a DESCRIBE KEYSPACES');
     return 'DESCRIBE KEYSPACES';
   }
   
