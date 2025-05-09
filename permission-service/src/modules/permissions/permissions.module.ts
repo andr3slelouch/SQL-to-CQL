@@ -6,13 +6,19 @@ import { ManagePermissionsService } from './services/manage-permissions.service'
 import { KeyspacesService } from './services/keyspaces.service';
 import { DatabaseModule } from '../../database/database.module';
 import { UserFinderUtil } from '../../common/utils/user-finder.util';
+import { HttpModule } from '@nestjs/axios';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [
+    DatabaseModule,
+    HttpModule,                // Añadimos el HttpModule para las peticiones HTTP
+    ConfigModule              // Añadimos el ConfigModule para leer las variables de entorno
+  ],
   controllers: [
     ManagePermissionsController,
     KeyspacesController,
-    OperationsController // Agregar el nuevo controlador
+    OperationsController
   ],
   providers: [
     ManagePermissionsService,
