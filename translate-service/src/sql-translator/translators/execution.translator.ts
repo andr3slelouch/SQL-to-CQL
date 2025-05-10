@@ -37,8 +37,19 @@ export class ExecutionTranslator implements Translator {
       // Verificar si es una operación de keyspace que debería actualizar permisos
       const shouldUpdatePermissions = this.shouldUpdateKeyspacePermissions(cql);
       
-      // Ejecutar la consulta en Cassandra
-      const result = await this.cassandraService.execute(cql);
+      // Verificar si la consulta es un BATCH (para inserts múltiples)
+      const isBatch = cql.includes('BEGIN BATCH') && cql.includes('APPLY BATCH');
+      
+      let result;
+      
+      if (isBatch) {
+        // Si es un BATCH, usar el método específico para ejecutar BATCH
+        this.logger.log(`Detectado BATCH en consulta CQL, usando executeBatchFromString`);
+        result = await this.cassandraService.executeBatchFromString(cql);
+      } else {
+        // Ejecutar la consulta normal en Cassandra
+        result = await this.cassandraService.execute(cql);
+      }
       
       // Si es una operación relevante y tenemos un token y usuario, actualizar permisos
       if (shouldUpdatePermissions && options?.token && options?.user) {

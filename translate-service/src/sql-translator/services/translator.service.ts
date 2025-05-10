@@ -68,13 +68,33 @@ export class TranslatorService implements OnModuleInit {
     const sqlTrim = sql.trim();
     const sqlUpper = sqlTrim.toUpperCase();
     
+    // CASO ESPECIAL CRÍTICO: Verificar si ya es DESCRIBE KEYSPACES
+    if (sqlUpper === 'DESCRIBE KEYSPACES') {
+      this.logger.log(`Detectado comando DESCRIBE KEYSPACES, manteniendo sin cambios`);
+      return sqlUpper;
+    }
+    
+    // CORREGIDO: Verificar si es "DESCRIBE TABLE KEYSPACES" y convertirlo correctamente
+    if (sqlUpper === 'DESCRIBE TABLE KEYSPACES' || sqlUpper === 'DESC TABLE KEYSPACES') {
+      this.logger.log(`Detectado DESCRIBE TABLE KEYSPACES incorrecto, corrigiendo a DESCRIBE KEYSPACES`);
+      return 'DESCRIBE KEYSPACES';
+    }
+    
     // Caso especial: DESCRIBE TABLE nombreTabla
-    if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+    // Verificar explícitamente que no sea "DESCRIBE TABLE KEYSPACES"
+    if ((sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) && 
+         !sqlUpper.endsWith(' KEYSPACES')) {
       const prefix = sqlUpper.startsWith('DESCRIBE TABLE ') ? 'DESCRIBE TABLE ' : 'DESC TABLE ';
       const tableName = sqlTrim.substring(prefix.length).trim();
-      if (tableName) {
+      
+      // Verificación adicional para evitar tratar "KEYSPACES" como nombre de tabla
+      if (tableName && tableName.toUpperCase() !== 'KEYSPACES') {
         this.logger.log(`Detectado comando DESCRIBE TABLE para tabla: ${tableName}`);
         return `DESCRIBE TABLE ${tableName}`;
+      } else if (tableName && tableName.toUpperCase() === 'KEYSPACES') {
+        // Si la tabla es "KEYSPACES", convertir a DESCRIBE KEYSPACES
+        this.logger.log(`Detectado DESCRIBE TABLE KEYSPACES, corrigiendo a DESCRIBE KEYSPACES`);
+        return 'DESCRIBE KEYSPACES';
       }
     }
     
@@ -96,7 +116,17 @@ export class TranslatorService implements OnModuleInit {
    */
   translateSQL(sql: string, options: TranslationOptions = {}): SqlToCqlResult {
     try {
-      // NUEVO: Procesamiento especial para comandos problemáticos
+      // VERIFICACIÓN INICIAL: Verificar directamente si es SHOW DATABASES/SCHEMAS
+      const sqlInitialUpper = sql.trim().toUpperCase();
+      if (sqlInitialUpper === 'SHOW DATABASES' || sqlInitialUpper === 'SHOW SCHEMAS') {
+        this.logger.log(`[CRITICAL] Detectado SHOW DATABASES/SCHEMAS directamente en translateSQL`);
+        return {
+          success: true,
+          cql: 'DESCRIBE KEYSPACES'
+        };
+      }
+      
+      // Procesamiento especial para comandos problemáticos
       const sentenciaEspecial = this.procesarSentenciaEspecial(sql);
       if (sentenciaEspecial) {
         this.logger.log(`Usando traducción especial para: "${sql}" -> "${sentenciaEspecial}"`);
@@ -110,17 +140,36 @@ export class TranslatorService implements OnModuleInit {
       const parseResult = this.sqlParserService.parseSQL(sql);
       
       if (!parseResult.success) {
-        // NUEVO: Intentar manejar casos de error específicos
+        // Intentar manejar casos de error específicos
         if (sql.toUpperCase().startsWith('DESCRIBE TABLE') || sql.toUpperCase().startsWith('DESC TABLE')) {
           const parts = sql.split(' ');
           if (parts.length >= 3) {
             const tableName = parts.slice(2).join(' ').trim();
+            
+            // Verificar si la tabla es "KEYSPACES"
+            if (tableName.toUpperCase() === 'KEYSPACES') {
+              this.logger.log(`Recuperando de error de parsing para DESCRIBE TABLE KEYSPACES, corrigiendo a DESCRIBE KEYSPACES`);
+              return {
+                success: true,
+                cql: `DESCRIBE KEYSPACES`
+              };
+            }
+            
             this.logger.log(`Recuperando de error de parsing para DESCRIBE TABLE: ${tableName}`);
             return {
               success: true,
               cql: `DESCRIBE TABLE ${tableName}`
             };
           }
+        }
+        
+        // CASO ESPECIAL: Verificar si es SHOW DATABASES/SCHEMAS cuando el parser falla
+        if (sql.toUpperCase() === 'SHOW DATABASES' || sql.toUpperCase() === 'SHOW SCHEMAS') {
+          this.logger.log(`Recuperando de error de parsing para SHOW DATABASES/SCHEMAS`);
+          return {
+            success: true,
+            cql: 'DESCRIBE KEYSPACES'
+          };
         }
         
         return {
@@ -141,6 +190,25 @@ export class TranslatorService implements OnModuleInit {
       // Agregar log para depuración
       this.logger.debug(`AST a traducir: ${JSON.stringify(statement)}`);
       
+      // Detección especial para INSERT con múltiples filas
+      if (statement.type === 'insert' && 
+          statement.values && 
+          Array.isArray(statement.values) && 
+          statement.values.length > 1) {
+        this.logger.log(`Detectada sentencia INSERT con múltiples filas (${statement.values.length} filas)`);
+      }
+      
+      // CASO ESPECIAL: Verificar si es un SHOW o DESCRIBE relacionado con bases de datos/keyspaces
+      if ((statement.type === 'show' && 
+          (statement.keyword === 'databases' || statement.keyword === 'schemas')) ||
+          (statement.type === 'describe' && statement.table === 'keyspaces')) {
+        this.logger.log(`Detectado comando especial de SHOW DATABASES o DESCRIBE KEYSPACES en AST`);
+        return {
+          success: true,
+          cql: 'DESCRIBE KEYSPACES'
+        };
+      }
+      
       const translator = this.findTranslator(statement);
       
       if (!translator) {
@@ -151,12 +219,38 @@ export class TranslatorService implements OnModuleInit {
       }
       
       // Traducir el AST a CQL
-      const cql = translator.translate(statement);
+      let cql = translator.translate(statement);
       
       if (!cql) {
         return {
           success: false,
           error: 'No se pudo traducir la sentencia SQL a CQL'
+        };
+      }
+      
+      // CORRECCIÓN CRÍTICA: Verificar si la traducción generó "DESCRIBE TABLE KEYSPACES"
+      if (cql.toUpperCase() === 'DESCRIBE TABLE KEYSPACES' || 
+          cql.toUpperCase() === 'DESC TABLE KEYSPACES' ||
+          cql.toUpperCase().includes('DESC TABLE KEYSPACES') ||
+          cql.toUpperCase().includes('DESCRIBE TABLE KEYSPACES')) {
+        this.logger.log(`Detectado error de traducción a DESCRIBE TABLE KEYSPACES, corrigiendo a DESCRIBE KEYSPACES`);
+        cql = 'DESCRIBE KEYSPACES';
+      }
+      
+      // Detectar si es un INSERT múltiple (contiene BEGIN BATCH)
+      const isMultiInsert = cql.includes('BEGIN BATCH') && cql.includes('APPLY BATCH');
+      
+      // Añadir mensaje informativo si es una inserción múltiple
+      if (isMultiInsert) {
+        const insertCount = (cql.match(/INSERT INTO/g) || []).length;
+        return {
+          success: true,
+          cql,
+          message: `Se ha convertido a ${insertCount} sentencias INSERT en un BATCH para Cassandra`,
+          copyableCqlQuery: {
+            query: cql,
+            description: `INSERT múltiple (${insertCount} filas)`
+          }
         };
       }
       
@@ -185,7 +279,14 @@ export class TranslatorService implements OnModuleInit {
    * @returns Resultado de la traducción y ejecución
    */
   async translateAndExecute(sql: string, options: TranslationOptions & { token?: string, user?: any } = {}): Promise<SqlToCqlResult> {
-    // NUEVO: Procesar la sentencia SQL para casos especiales
+    // VERIFICACIÓN ESPECIAL: Verificar directamente si es SHOW DATABASES/SCHEMAS
+    const sqlUpper = sql.trim().toUpperCase();
+    if (sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS') {
+      this.logger.log(`[CRITICAL] Detectado SHOW DATABASES/SCHEMAS directamente en translateAndExecute`);
+      sql = 'DESCRIBE KEYSPACES';
+    }
+    
+    // Procesar la sentencia SQL para casos especiales
     const sentenciaEspecial = this.procesarSentenciaEspecial(sql);
     if (sentenciaEspecial) {
       this.logger.log(`Usando sentencia especial para ejecución: "${sql}" -> "${sentenciaEspecial}"`);
@@ -195,6 +296,15 @@ export class TranslatorService implements OnModuleInit {
     // Primero traducir
     const translationResult = this.translateSQL(sql, options);
     
+    // VERIFICACIÓN FINAL: Comprobar si hay algún error de traducción que generó "DESCRIBE TABLE KEYSPACES"
+    if (translationResult.success && translationResult.cql && 
+        (translationResult.cql.toUpperCase() === 'DESCRIBE TABLE KEYSPACES' || 
+         translationResult.cql.toUpperCase().includes('DESC TABLE KEYSPACES') ||
+         translationResult.cql.toUpperCase().includes('DESCRIBE TABLE KEYSPACES'))) {
+      this.logger.log(`[CRITICAL] Corrigiendo traducción final de DESCRIBE TABLE KEYSPACES a DESCRIBE KEYSPACES`);
+      translationResult.cql = 'DESCRIBE KEYSPACES';
+    }
+    
     // Si la traducción falló o no se pide ejecución, retornar solo la traducción
     if (!translationResult.success || 
         !options.executeInCassandra || 
@@ -203,11 +313,41 @@ export class TranslatorService implements OnModuleInit {
     }
     
     try {
+      // SUPER VERIFICACIÓN FINAL antes de ejecutar
+      let cqlToExecute = translationResult.cql;
+      if (cqlToExecute.toUpperCase() === 'DESCRIBE TABLE KEYSPACES' || 
+          cqlToExecute.toUpperCase().includes('DESC TABLE KEYSPACES') ||
+          cqlToExecute.toUpperCase().includes('DESCRIBE TABLE KEYSPACES')) {
+        this.logger.log(`[SUPER CRITICAL] Última verificación: corrigiendo DESCRIBE TABLE KEYSPACES a DESCRIBE KEYSPACES`);
+        cqlToExecute = 'DESCRIBE KEYSPACES';
+        translationResult.cql = cqlToExecute;
+      }
+      
+      // Verificar si es un INSERT múltiple (contiene BEGIN BATCH)
+      const isMultiInsert = cqlToExecute.includes('BEGIN BATCH') && 
+                            cqlToExecute.includes('APPLY BATCH');
+      
+      this.logger.log(`Ejecutando ${isMultiInsert ? 'INSERT múltiple' : 'consulta normal'}: ${cqlToExecute}`);
+      
       // Ejecutar la consulta CQL en Cassandra
-      const executionResult = await this.executionTranslator.execute(translationResult.cql, {
+      const executionResult = await this.executionTranslator.execute(cqlToExecute, {
         token: options.token,
         user: options.user
       });
+      
+      // Formatear mensaje especial para INSERTs múltiples
+      if (isMultiInsert && executionResult.success) {
+        const insertCount = (cqlToExecute.match(/INSERT INTO/g) || []).length;
+        return {
+          ...translationResult,
+          executionResult: {
+            success: executionResult.success,
+            data: executionResult.result,
+            error: executionResult.error,
+            message: `Se ejecutaron ${insertCount} sentencias INSERT con éxito`
+          }
+        };
+      }
       
       return {
         ...translationResult,
@@ -238,6 +378,20 @@ export class TranslatorService implements OnModuleInit {
    */
   async executeCQL(cql: string, options: { token?: string, user?: any } = {}): Promise<any> {
     try {
+      // VERIFICACIÓN FINAL: Comprobar si hay algún error que generó "DESCRIBE TABLE KEYSPACES"
+      if (cql.toUpperCase() === 'DESCRIBE TABLE KEYSPACES' || 
+          cql.toUpperCase().includes('DESC TABLE KEYSPACES') ||
+          cql.toUpperCase().includes('DESCRIBE TABLE KEYSPACES')) {
+        this.logger.log(`[CRITICAL] Corrigiendo ejecución directa de DESCRIBE TABLE KEYSPACES a DESCRIBE KEYSPACES`);
+        cql = 'DESCRIBE KEYSPACES';
+      }
+      
+      // Determinar si es un BATCH
+      const isBatch = cql.includes('BEGIN BATCH') && cql.includes('APPLY BATCH');
+      if (isBatch) {
+        this.logger.log('Ejecutando BATCH directo en CQL');
+      }
+      
       const executionResult = await this.executionTranslator.execute(cql, options);
       return {
         success: executionResult.success,
@@ -259,6 +413,14 @@ export class TranslatorService implements OnModuleInit {
    * @returns Traductor que puede manejar el AST o null si no se encuentra
    */
   private findTranslator(ast: any): Translator | null {
+    // CASO ESPECIAL: Verificar si es un AST de tipo SHOW DATABASES o similar
+    if (ast.type === 'show' && 
+        (ast.keyword === 'databases' || ast.keyword === 'schemas')) {
+      this.logger.log(`[CRITICAL] Detectado AST de tipo SHOW DATABASES/SCHEMAS en findTranslator`);
+      // Usar el traductor de base de datos para SHOW DATABASES
+      return this.databaseTranslator;
+    }
+    
     // Log para depuración
     this.logger.debug(`Buscando traductor para AST de tipo: ${ast.type}, keyword: ${ast.keyword || 'N/A'}`);
     

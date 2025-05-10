@@ -63,7 +63,7 @@ export class TranslatorController {
     this.logger.log(`[TRANSLATOR] Solicitud de ejecución SQL: "${body.sql}"`);
     this.logger.log(`[TRANSLATOR] Usuario: ${JSON.stringify(req.user)}`);
 
-    // NUEVO: Procesar la sentencia SQL para manejar "DESCRIBE TABLE nombreTabla"
+    // Procesar la sentencia SQL para manejar comandos especiales
     const sqlProcesado = this.procesarSentenciaSQL(body.sql);
     if (sqlProcesado !== body.sql) {
       this.logger.log(`[TRANSLATOR] SQL procesado: "${sqlProcesado}" (original: "${body.sql}")`);
@@ -112,8 +112,8 @@ export class TranslatorController {
   }
 
   /**
-   * NUEVO: Método para procesar la sentencia SQL antes de ejecutarla
-   * Ajusta la sintaxis de ciertos comandos problemáticos como "DESCRIBE TABLE"
+   * Método para procesar la sentencia SQL antes de ejecutarla
+   * Ajusta la sintaxis de ciertos comandos problemáticos
    * @param sql Sentencia SQL original
    * @returns Sentencia SQL procesada
    */
@@ -121,22 +121,31 @@ export class TranslatorController {
     const sqlTrim = sql.trim();
     const sqlUpper = sqlTrim.toUpperCase();
     
-    // Manejo de DESCRIBE TABLE nombreTabla
-    if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
-      const partes = sqlTrim.split(' ');
-      if (partes.length >= 3) {
-        // Extraer el nombre de la tabla (puede tener espacios)
-        const tableName = partes.slice(2).join(' ').trim();
-        // Componer la sentencia CQL directamente
-        this.logger.log(`[TRANSLATOR] Ajustando sentencia DESCRIBE TABLE para tabla: ${tableName}`);
-        return `DESCRIBE TABLE ${tableName}`;
-      }
-    }
-    
-    // Manejo de SHOW DATABASES
+    // Manejo de SHOW DATABASES/SCHEMAS - asegurarnos de traducir correctamente
     if (sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS') {
       this.logger.log(`[TRANSLATOR] Ajustando sentencia SHOW DATABASES/SCHEMAS a DESCRIBE KEYSPACES`);
       return 'DESCRIBE KEYSPACES';
+    }
+    
+    // Manejo de DESCRIBE TABLE KEYSPACES - corregir confusión
+    if (sqlUpper === 'DESCRIBE TABLE KEYSPACES' || sqlUpper === 'DESC TABLE KEYSPACES') {
+      this.logger.log(`[TRANSLATOR] Corrigiendo DESCRIBE TABLE KEYSPACES a DESCRIBE KEYSPACES`);
+      return 'DESCRIBE KEYSPACES';
+    }
+    
+    // Manejo de DESCRIBE TABLE nombreTabla
+    if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+      // Asegurarnos de que no estemos intentando describir una tabla llamada "KEYSPACES"
+      if (!sqlUpper.endsWith(' KEYSPACES')) {
+        const partes = sqlTrim.split(' ');
+        if (partes.length >= 3) {
+          // Extraer el nombre de la tabla (puede tener espacios)
+          const tableName = partes.slice(2).join(' ').trim();
+          // Componer la sentencia CQL directamente
+          this.logger.log(`[TRANSLATOR] Ajustando sentencia DESCRIBE TABLE para tabla: ${tableName}`);
+          return `DESCRIBE TABLE ${tableName}`;
+        }
+      }
     }
     
     // Si no se necesita ajuste, devolver la sentencia original
@@ -176,26 +185,42 @@ export class TranslatorController {
       // Verificar abreviaturas comunes antes del parsing
       const sqlUpper = sql.trim().toUpperCase();
 
-      // MODIFICADO: Detección especial para DESCRIBE TABLE
-      if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
-        this.logger.log(`[TRANSLATOR] Detectado comando DESCRIBE TABLE: ${sqlUpper}`);
-        return 'DESCRIBE TABLE';
+      // CASO ESPECIAL: Verificación directa para DESCRIBE KEYSPACES
+      if (sqlUpper === 'DESCRIBE KEYSPACES') {
+        this.logger.log(`[TRANSLATOR] Detectado comando DESCRIBE KEYSPACES explícito`);
+        return 'DESCRIBE KEYSPACES';
       }
 
-      // MODIFICADO: Manejo especial para SHOW DATABASES/SCHEMAS y variantes
-      if (sqlUpper === 'SHOW DATABASES' || 
-          sqlUpper === 'SHOW SCHEMAS' || 
-          sqlUpper.startsWith('SHOW DATABASE') ||
-          sqlUpper.startsWith('SHOW SCHEMA')) {
+      // CASO ESPECIAL: Verificación directa para SHOW DATABASES/SCHEMAS
+      if (sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS') {
         this.logger.log(`[TRANSLATOR] Detectado comando SHOW DATABASES/SCHEMAS: ${sqlUpper}`);
         return 'DESCRIBE KEYSPACES';
       }
+
+      // Detección para DESCRIBE TABLE
+      if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
+        // Verificar que no sea "DESCRIBE TABLE KEYSPACES" específicamente
+        if (!sqlUpper.includes('TABLE KEYSPACES') && !sqlUpper.includes('TABLE KEYSPACE')) {
+          this.logger.log(`[TRANSLATOR] Detectado comando DESCRIBE TABLE: ${sqlUpper}`);
+          return 'DESCRIBE TABLE';
+        } else {
+          // Si es "DESCRIBE TABLE KEYSPACES", tratar como DESCRIBE KEYSPACES
+          this.logger.log(`[TRANSLATOR] Detectado DESCRIBE TABLE KEYSPACES, tratando como DESCRIBE KEYSPACES`);
+          return 'DESCRIBE KEYSPACES';
+        }
+      }
       
-      // Verificar tanto DESCRIBE KEYSPACES como SHOW DATABASES
-      if (sqlUpper === 'DESC KEYSPACES' || sqlUpper === 'DESCRIBE KEYSPACES' || 
-          sqlUpper.includes('KEYSPACES') || 
-          sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS' ||
-          sqlUpper.includes('DATABASES')) {
+      // Manejo especial para SHOW DATABASES/SCHEMAS variantes
+      if (sqlUpper.startsWith('SHOW DATABASE') || sqlUpper.startsWith('SHOW SCHEMA')) {
+        this.logger.log(`[TRANSLATOR] Detectada variante de SHOW DATABASES/SCHEMAS: ${sqlUpper}`);
+        return 'DESCRIBE KEYSPACES';
+      }
+      
+      // Verificar otras variantes de DESCRIBE KEYSPACES
+      if (sqlUpper === 'DESC KEYSPACES' || 
+          sqlUpper.startsWith('DESCRIBE KEYSPACE') || 
+          sqlUpper.startsWith('DESC KEYSPACE') ||
+          sqlUpper.includes('KEYSPACES')) {
         this.logger.log(`[TRANSLATOR] Detectada operación DESCRIBE KEYSPACES o equivalente: ${sqlUpper}`);
         return 'DESCRIBE KEYSPACES';
       }
@@ -209,23 +234,30 @@ export class TranslatorController {
 
       // Manejar casos generales de DESC/DESCRIBE sin especificar (asumimos TABLES)
       if (sqlUpper === 'DESC' || sqlUpper === 'DESCRIBE') {
-        this.logger.log(`[TRANSLATOR] Detectada abreviatura DESC/DESCRIBE sin especificar, mapeando a DESCRIBE TABLES`);
+        this.logger.log(`[TRANSLATOR] Detectada abreviatura DESC/DESCRIBE sin especificar, mapeando a DESCRIBE TABLES por defecto`);
         return 'DESCRIBE TABLES';
       }
 
       // Parsear la sentencia SQL
       const parseResult = this.sqlParserService.parseSQL(sql);
       if (!parseResult.success || !parseResult.ast) {
-        // MODIFICADO: Manejar comandos específicos cuando el parser falla
+        // Manejar comandos específicos cuando el parser falla
         this.logger.warn(`[TRANSLATOR] No se pudo parsear la sentencia SQL: ${sql}`);
         
-        // Manejar comandos DESCRIBE TABLE
+        // Manejar comandos DESCRIBE
         if (sqlUpper.startsWith('DESCRIBE ') || sqlUpper.startsWith('DESC ')) {
-          // Si contiene la palabra TABLE
-          if (sqlUpper.includes(' TABLE ')) {
+          // Si contiene "KEYSPACES" específicamente
+          if (sqlUpper.includes('KEYSPACES')) {
+            this.logger.log(`[TRANSLATOR] Extrayendo DESCRIBE KEYSPACES desde SQL no parseado`);
+            return 'DESCRIBE KEYSPACES';
+          }
+          
+          // Si contiene la palabra TABLE (y no KEYSPACES)
+          if (sqlUpper.includes(' TABLE ') && !sqlUpper.includes('KEYSPACES')) {
             this.logger.log(`[TRANSLATOR] Extrayendo DESCRIBE TABLE desde SQL no parseado`);
             return 'DESCRIBE TABLE';
           }
+          
           // Si no incluye TABLES o KEYSPACES, asumimos que es DESCRIBE para una tabla específica
           if (!sqlUpper.includes(' TABLES') && !sqlUpper.includes(' KEYSPACES')) {
             this.logger.log(`[TRANSLATOR] Asumiendo DESCRIBE TABLE para SQL no parseado`);
@@ -272,6 +304,12 @@ export class TranslatorController {
    * @returns Operación normalizada
    */
   private mapearOperacionAFormatoEstandar(statement: any, sqlUpper: string): string {
+    // Verificación directa para DESCRIBE KEYSPACES (prioridad alta)
+    if (sqlUpper === 'DESCRIBE KEYSPACES' || sqlUpper.includes('SHOW DATABASE')) {
+      this.logger.log(`[TRANSLATOR] Detectado DESCRIBE KEYSPACES exacto en mapeo`);
+      return 'DESCRIBE KEYSPACES';
+    }
+
     // Para sentencias USE
     if (statement.type === 'use') {
       return 'USE';
@@ -297,54 +335,48 @@ export class TranslatorController {
       return 'DELETE';
     }
 
-    // MODIFICADO: Para sentencias DESCRIBE/SHOW
+    // Para sentencias DESCRIBE/SHOW
     if (statement.type === 'describe' || statement.type === 'desc' || 
         statement.type === 'show') {
       
-      // DESCRIBE TABLE específico
-      if ((statement.type === 'describe' || statement.type === 'desc') && 
-          statement.table && typeof statement.table === 'string' &&
-          statement.table !== 'tables' && statement.table !== 'keyspaces' &&
-          statement.table !== 'databases' && statement.table !== 'schemas') {
-        
-        // Verificar si el SQL original contiene "TABLE" explícitamente
-        if (sqlUpper.includes('TABLE')) {
-          this.logger.log(`[TRANSLATOR] Detectado DESCRIBE TABLE para tabla específica: ${statement.table}`);
-          return 'DESCRIBE TABLE';
-        }
-      }
-      
-      // Para SHOW DATABASES -> DESCRIBE KEYSPACES
-      if (statement.type === 'show' && 
-          (statement.keyword === 'databases' || statement.keyword === 'schemas')) {
-        this.logger.log(`[TRANSLATOR] Detectado SHOW DATABASES/SCHEMAS, mapeando a DESCRIBE KEYSPACES`);
-        return 'DESCRIBE KEYSPACES';
-      }
-      
       // Primero verificar si es KEYSPACES específicamente
-      if (statement.target === 'keyspaces' ||
-          (statement.keyword === 'databases' || statement.keyword === 'schemas') ||
-          (sqlUpper.includes('KEYSPACES')) ||
-          (sqlUpper.includes('DATABASES')) ||
-          (sqlUpper.includes('SCHEMAS'))) {
+      if ((statement.type === 'describe' || statement.type === 'desc') &&
+          (statement.target === 'keyspaces' || 
+           sqlUpper.includes('KEYSPACES') || 
+           sqlUpper.includes('DATABASE'))) {
         this.logger.log(`[TRANSLATOR] Detectado DESCRIBE KEYSPACES por AST o texto SQL`);
         return 'DESCRIBE KEYSPACES';
       }
       
-      // Luego verificar si es TABLES específicamente
+      // Para SHOW DATABASES -> DESCRIBE KEYSPACES
+      if (statement.type === 'show' && 
+          (statement.keyword === 'databases' || statement.keyword === 'schemas' ||
+           sqlUpper.includes('DATABASE') || sqlUpper.includes('SCHEMA'))) {
+        this.logger.log(`[TRANSLATOR] Detectado SHOW DATABASES/SCHEMAS, mapeando a DESCRIBE KEYSPACES`);
+        return 'DESCRIBE KEYSPACES';
+      }
+      
+      // DESCRIBE TABLE específico
+      if ((statement.type === 'describe' || statement.type === 'desc') && 
+          statement.table && typeof statement.table === 'string') {
+        
+        // Caso especial: si la tabla es "keyspaces", tratar como DESCRIBE KEYSPACES
+        if (statement.table.toLowerCase() === 'keyspaces') {
+          this.logger.log(`[TRANSLATOR] Detectado DESCRIBE para tabla 'keyspaces', mapeando a DESCRIBE KEYSPACES`);
+          return 'DESCRIBE KEYSPACES';
+        }
+        
+        // Para otras tablas normales
+        this.logger.log(`[TRANSLATOR] Detectado DESCRIBE TABLE para tabla específica: ${statement.table}`);
+        return 'DESCRIBE TABLE';
+      }
+      
+      // Verificar si es TABLES específicamente
       if (statement.target === 'tables' ||
           (statement.keyword === 'tables') ||
           (sqlUpper.includes('TABLES'))) {
         this.logger.log(`[TRANSLATOR] Detectado DESCRIBE TABLES por AST o texto SQL`);
         return 'DESCRIBE TABLES';
-      }
-      
-      // Si hay una tabla específica, es DESCRIBE TABLE
-      if (statement.table && typeof statement.table === 'string' &&
-          statement.table !== 'tables' && statement.table !== 'keyspaces' &&
-          statement.table !== 'databases' && statement.table !== 'schemas') {
-        this.logger.log(`[TRANSLATOR] Detectado DESCRIBE TABLE para tabla específica: ${statement.table}`);
-        return 'DESCRIBE TABLE';
       }
       
       // Si llegamos aquí, asumimos que es DESCRIBE TABLES por defecto

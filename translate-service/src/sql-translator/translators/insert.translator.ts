@@ -1,4 +1,3 @@
-// src/sql-translator/translators/insert.translator.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { Translator } from '../interfaces/translator.interface';
 
@@ -18,42 +17,168 @@ export class InsertTranslator implements Translator {
   /**
    * Traduce un AST de sentencia INSERT a CQL
    * @param ast AST de la sentencia SQL
-   * @returns Sentencia CQL equivalente
+   * @returns Sentencia CQL equivalente o múltiples sentencias para inserciones múltiples
    */
   translate(ast: any): string | null {
     if (!this.canHandle(ast)) {
       return null;
     }
-    
+
     try {
       // Extraer componentes de la sentencia INSERT
       const tableName = this.extractTableName(ast);
       const columns = this.extractColumns(ast);
       const values = this.extractValues(ast);
-      
+
       // Verificar si hay características no soportadas
       this.checkUnsupportedFeatures(ast);
+
+      // Determinar si tenemos múltiples filas para insertar
+      const hasMultipleRows = this.hasMultipleRows(values);
       
-      // Construir la sentencia CQL
-      // En CQL, podemos usar la misma sintaxis de INSERT que en SQL
-      let cql = `INSERT INTO ${tableName} (${columns.join(', ')})`;
-      
-      // Verificar si hay una cláusula IF NOT EXISTS
-      const ifNotExists = ast.ignore || ast.conflict === 'ignore';
-      if (ifNotExists) {
-        cql += ' IF NOT EXISTS';
+      if (hasMultipleRows) {
+        // Si hay múltiples filas, generar múltiples sentencias INSERT
+        return this.generateMultipleInserts(tableName, columns, values, ast);
+      } else {
+        // Para una sola fila, se mantiene la lógica original
+        let cql = `INSERT INTO ${tableName} (${columns.join(', ')})`;
+        
+        // Verificar si hay una cláusula IF NOT EXISTS
+        const ifNotExists = ast.ignore || ast.conflict === 'ignore';
+        if (ifNotExists) {
+          cql += ' IF NOT EXISTS';
+        }
+        
+        // Añadir VALUES
+        cql += ` VALUES ${this.formatValues(values, columns)}`;
+        
+        return cql;
       }
-      
-      // Añadir VALUES
-      cql += ` VALUES ${this.formatValues(values, columns)}`;
-      
-      return cql;
     } catch (error: any) {
       this.logger.error(`Error al traducir INSERT: ${error.message}`);
       return this.createErrorComment(error.message);
     }
   }
-  
+
+  /**
+   * Determina si hay múltiples filas para insertar
+   * @param valuesRows Array de valores
+   * @returns true si hay múltiples filas, false si solo hay una
+   */
+  private hasMultipleRows(valuesRows: any[]): boolean {
+    // Si values tiene más de un elemento, generalmente indica múltiples filas
+    if (valuesRows.length > 1) {
+      return true;
+    }
+    
+    // Para el caso especial de un array con un elemento que contiene múltiples filas
+    if (valuesRows.length === 1 && Array.isArray(valuesRows[0]) && valuesRows[0].length > 1) {
+      return true;
+    }
+
+    // Para expr_list con múltiples filas
+    if (valuesRows.length === 1 && 
+        typeof valuesRows[0] === 'object' && 
+        valuesRows[0] !== null && 
+        valuesRows[0].type === 'expr_list' &&
+        Array.isArray(valuesRows[0].value) && 
+        valuesRows[0].value.length > 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Genera múltiples sentencias INSERT para Cassandra
+   * @param tableName Nombre de la tabla
+   * @param columns Columnas
+   * @param valuesRows Filas de valores
+   * @param ast AST original para verificar opciones
+   * @returns Cadena con múltiples sentencias INSERT
+   */
+  private generateMultipleInserts(tableName: string, columns: string[], valuesRows: any[], ast: any): string {
+    const ifNotExists = ast.ignore || ast.conflict === 'ignore';
+    const insertStatements: string[] = [];
+    
+    // Procesar los valores para obtener cada fila
+    const rows = this.extractRowsFromValues(valuesRows, columns);
+    
+    // Generar una sentencia INSERT para cada fila
+    for (const row of rows) {
+      let insert = `INSERT INTO ${tableName} (${columns.join(', ')})`;
+      
+      if (ifNotExists) {
+        insert += ' IF NOT EXISTS';
+      }
+      
+      insert += ` VALUES (${row.join(', ')});`;
+      insertStatements.push(insert);
+    }
+    
+    // Combinar todas las sentencias INSERT con un separador
+    // Retornar el batch con comentarios explicativos
+    return `-- Sentencia SQL original convertida a múltiples INSERTs para Cassandra
+-- Cassandra no soporta múltiples filas en un solo INSERT
+-- Se han generado ${insertStatements.length} sentencias INSERT individuales
+
+BEGIN BATCH
+${insertStatements.join('\n')}
+APPLY BATCH;
+
+-- Nota: BATCH en Cassandra no garantiza atomicidad, solo se usa aquí para agrupar las sentencias`;
+  }
+
+  /**
+   * Extrae filas individuales del formato de valores
+   * @param valuesRows Array de valores
+   * @param columns Columnas para referencia
+   * @returns Array de filas, donde cada fila es un array de valores formateados
+   */
+  private extractRowsFromValues(valuesRows: any[], columns: string[]): string[][] {
+    const rows: string[][] = [];
+    
+    // Procesar cada valor según su formato
+    for (const row of valuesRows) {
+      // Manejar caso especial de expr_list
+      if (typeof row === 'object' && row !== null && row.type === 'expr_list' && Array.isArray(row.value)) {
+        const formattedValues: string[] = [];
+        for (const item of row.value) {
+          formattedValues.push(this.formatValue(item));
+        }
+        rows.push(formattedValues);
+        continue;
+      }
+      
+      // Manejar arrays estándar
+      if (Array.isArray(row)) {
+        const formattedValues: string[] = [];
+        for (const value of row) {
+          formattedValues.push(this.formatValue(value));
+        }
+        rows.push(formattedValues);
+        continue;
+      }
+      
+      // Manejar objetos no estándar
+      if (typeof row === 'object' && row !== null) {
+        const extractedValues = this.extractObjectValues(row, columns);
+        if (extractedValues.length > 0) {
+          rows.push(extractedValues);
+        } else {
+          // Fallback: usar la representación del objeto
+          rows.push([this.formatValue(row)]);
+        }
+        continue;
+      }
+      
+      // Caso por defecto
+      rows.push([String(row)]);
+    }
+    
+    return rows;
+  }
+
   /**
    * Crea un comentario para errores
    * @param errorMessage Mensaje de error
@@ -62,7 +187,7 @@ export class InsertTranslator implements Translator {
   private createErrorComment(errorMessage: string): string {
     return `-- Error en la traducción INSERT: ${errorMessage}`;
   }
-  
+
   /**
    * Extrae el nombre de la tabla de la sentencia INSERT
    * @param ast AST de la sentencia INSERT
@@ -72,10 +197,9 @@ export class InsertTranslator implements Translator {
     if (!ast.table || !ast.table[0] || !ast.table[0].table) {
       throw new Error('No se encontró una tabla válida en la sentencia INSERT');
     }
-    
     return ast.table[0].table;
   }
-  
+
   /**
    * Extrae las columnas de la sentencia INSERT
    * @param ast AST de la sentencia INSERT
@@ -85,10 +209,9 @@ export class InsertTranslator implements Translator {
     if (!ast.columns || !Array.isArray(ast.columns) || ast.columns.length === 0) {
       throw new Error('No se encontraron columnas válidas en la sentencia INSERT');
     }
-    
     return ast.columns;
   }
-  
+
   /**
    * Extrae los valores de la sentencia INSERT
    * @param ast AST de la sentencia INSERT
@@ -107,7 +230,7 @@ export class InsertTranslator implements Translator {
     
     return ast.values;
   }
-  
+
   /**
    * Formatea los valores para la sentencia INSERT
    * @param valuesRows Array de filas de valores
@@ -152,7 +275,6 @@ export class InsertTranslator implements Translator {
       for (const value of row) {
         formattedValues.push(this.formatValue(value));
       }
-      
       formattedRows.push(`(${formattedValues.join(', ')})`);
     }
     
@@ -171,7 +293,7 @@ export class InsertTranslator implements Translator {
    */
   private extractObjectValues(obj: any, columns: string[]): string[] {
     const values: string[] = [];
-
+    
     // Intentar extraer valores usando diferentes estrategias
     if (obj.type === 'expr_list' && Array.isArray(obj.value)) {
       // Caso especial para expr_list
@@ -190,7 +312,7 @@ export class InsertTranslator implements Translator {
           values.push(this.formatValue(obj[col]));
         }
       }
-
+      
       // Si no encontramos valores por columnas, intentar propiedades comunes
       if (values.length === 0) {
         const commonProps = ['value', 'values', 'data', 'items'];
@@ -210,10 +332,10 @@ export class InsertTranslator implements Translator {
         }
       }
     }
-
+    
     return values;
   }
-  
+
   /**
    * Formatea un valor individual para la sentencia INSERT
    * @param value Valor a formatear
@@ -248,7 +370,6 @@ export class InsertTranslator implements Translator {
         if (value.value !== undefined) {
           return this.formatValue(value.value);
         }
-        
         // Caso genérico para objetos desconocidos
         this.logger.warn(`Tipo de valor desconocido: ${value.type || 'sin tipo'}`);
         return JSON.stringify(value);
@@ -264,7 +385,7 @@ export class InsertTranslator implements Translator {
     // Caso por defecto
     return String(value);
   }
-  
+
   /**
    * Verifica si hay características no soportadas por Cassandra
    * @param ast AST de la sentencia INSERT
