@@ -1,0 +1,321 @@
+/* src/styles/AssignDatabasesPage.css */
+
+/* Main container styles */
+.assign-databases-container {
+  width: 100%;
+  color: white;
+}
+
+/* Search section styles */
+.search-section {
+  margin-bottom: 2rem;
+}
+
+.search-input-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-button {
+  min-width: auto;
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s, color 0.3s;
+  background-color: #1797DC !important;
+  color: white !important;
+}
+
+/* Loading indicator animation */
+.loading-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spin {
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* User info section styles */
+.user-info-section {
+  margin-bottom: 2.5rem;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+/* Style for readonly inputs to indicate they are not editable */
+input[readonly].admin-input {
+  background-color: rgba(255, 255, 255, 0.85);
+  color: #333;
+}
+
+/* Placeholder style for readonly inputs */
+input[readonly].admin-input::placeholder {
+  color: rgba(100, 100, 100, 0.5);
+  font-style: italic;
+}
+
+/* Database list styles */
+.databases-section {
+  margin-top: 2rem;
+}
+
+.databases-title {
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+  font-weight: normal;
+}
+
+.databases-list {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  padding: 1.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 2rem;
+}
+
+.database-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  padding: 0.8rem;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.database-item:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.database-name {
+  font-size: 1.2rem;
+  font-weight: normal;
+}
+
+/* Toggle switch styles */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 56px;
+  height: 28px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 28px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #1797DC; /* Updated to match hover color */
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(28px);
+}
+
+/* Styles for disabled toggle switch */
+input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button container */
+.button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.save-button {
+  min-width: 160px;
+  background-color: white;
+  color: #333;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 30px;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.save-button:hover {
+  background-color: #1797DC; /* Azul al hacer hover */
+  color: white;
+}
+
+/* User instruction message */
+.user-instruction-message {
+  text-align: center;
+  padding: 1rem;
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+/* Custom scrollbar for the database list */
+.databases-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.databases-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.databases-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.databases-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Modal styles (siguiendo el estilo de ConfigurePermissions.css) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: #4e5359;
+  border-radius: 15px;
+  width: 450px;
+  padding: 2rem;
+  color: white;
+}
+
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modal-message {
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.modal-button {
+  background-color: #4e5359;
+  color: white;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  min-width: 100px;
+  transition: all 0.3s ease;
+}
+
+/* Todos los botones ahora cambian a azul al hacer hover */
+.modal-button:hover {
+  background-color: #1797DC;
+  color: white;
+}
+
+.aceptar-button {
+  min-width: 150px;
+}
+
+/* Responsive styles */
+@media (max-width: 992px) {
+  .admin-form-row {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .modal-container {
+    width: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-input-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-button {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .databases-list {
+    padding: 1rem;
+  }
+  
+  .modal-container {
+    padding: 1.5rem;
+  }
+  
+  .modal-message {
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .modal-button {
+    font-size: 1.1rem;
+    padding: 0.7rem 1.5rem;
+  }
+  
+  .modal-buttons {
+    gap: 1.5rem;
+  }
+}
