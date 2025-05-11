@@ -1,33 +1,82 @@
 // src/components/ProtectedRoute.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, memo, useCallback } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import PerformanceLogger from '../utils/PerformanceLogger';
 
 interface ProtectedRouteProps {
   redirectPath?: string;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) => {
+// Para identificar componentes en console logs
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// Componente que solo muestra un indicador de carga
+const LoadingIndicator = memo(() => (
+  <div className="loading-container">
+    <div className="loading-spinner"></div>
+    <p>Verificando autenticación...</p>
+  </div>
+));
+
+// Componente que solo maneja la redirección
+const RedirectComponent = memo(({ to }: { to: string }) => {
+  console.log(`🚀 Redirigiendo a: ${to}`);
+  return <Navigate to={to} replace />;
+});
+
+// Definimos OutletWithMonitoring como un componente memoizado
+const OutletWithMonitoring = memo(() => {
+  const location = useLocation();
+  const outletId = useRef(`outlet-${generateId()}`).current;
+  const renderCount = useRef(0);
+  
+  renderCount.current++;
+  
+  useEffect(() => {
+    console.log(`🟢 [${outletId}] Outlet MONTADO en ${location.pathname}`);
+    
+    return () => {
+      console.log(`🔴 [${outletId}] Outlet DESMONTADO en ${location.pathname}`);
+    };
+  }, []); // Solo ejecutar al montar/desmontar
+  
+  console.log(`🔄 [${outletId}] Outlet renderizado #${renderCount.current}`);
+  
+  return <Outlet />;
+});
+
+// Componente interno que maneja la lógica pero aisla los cambios de renderizado
+const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
   const [localAuthChecked, setLocalAuthChecked] = useState<boolean>(false);
   const [isLocallyAuthenticated, setIsLocallyAuthenticated] = useState<boolean>(false);
   const [redirecting, setRedirecting] = useState<boolean>(false);
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  // ID único para este componente (estático)
+  const componentId = useRef(`pr-logic-${generateId()}`).current;
+  const renderCount = useRef(0);
   
-  // Verificar autenticación local para mayor estabilidad
+  renderCount.current++;
+  
+  // Log de cada renderizado con contador para ver cuántos re-renders ocurren
+  console.log(`📊 [${componentId}] LOGIC renderizado #${renderCount.current} en ${location.pathname}`);
+  console.log(`   - Auth:`, { isAuthenticated, loading, localAuthChecked, isLocallyAuthenticated, redirecting });
+  
+  // Analizar parent renders
   useEffect(() => {
+    console.log(`📌 [${componentId}] LOGIC inicializado, stack:`, new Error().stack);
+  }, []);
+  
+  // Verificar autenticación local UNA SOLA VEZ al montar el componente
+  useEffect(() => {
+    console.log(`🔍 [${componentId}] Verificando autenticación local`);
+    
     // Verificar el token en localStorage directamente
     const token = localStorage.getItem('accessToken');
     const userDataStr = localStorage.getItem('userData');
-    
-    // Registrar información para depuración
-    PerformanceLogger.logEvent('🔐 Verificación local de autenticación', {
-      hasToken: !!token,
-      hasUserData: !!userDataStr,
-      pathname: location.pathname
-    });
     
     if (token && userDataStr) {
       try {
@@ -48,56 +97,46 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) =
         const finalAuthState = isTokenValid && isUserDataValid;
         setIsLocallyAuthenticated(finalAuthState);
         
-        PerformanceLogger.logEvent('🔐 Resultado de verificación local', {
-          isTokenValid,
-          isUserDataValid,
-          finalAuthState,
-          pathname: location.pathname
-        });
+        // Determinar si el usuario es administrador
+        if (userData && userData.rol === true) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
       } catch (e) {
-        PerformanceLogger.logEvent('❌ Error en verificación local de autenticación', {
-          error: e,
-          pathname: location.pathname
-        });
+        console.error(`❌ [${componentId}] Error en verificación local:`, e);
         setIsLocallyAuthenticated(false);
+        setIsAdmin(false);
       }
     } else {
       setIsLocallyAuthenticated(false);
+      setIsAdmin(false);
     }
     
     setLocalAuthChecked(true);
-  }, [location.pathname]);
+    console.log(`✅ [${componentId}] Verificación local completada`);
+  }, []); // Solo se ejecuta al montar el componente
   
-  // Registrar cuando el componente se evalúa
+  // Actualizar isAdmin cuando cambia el usuario del contexto
   useEffect(() => {
-    // Solo proceder si hemos verificado la autenticación local
-    if (!localAuthChecked) {
+    if (!user) return;
+    
+    const newIsAdmin = user.rol === true;
+    
+    if (newIsAdmin !== isAdmin) {
+      console.log(`👑 [${componentId}] Usuario rol actualizado a: ${newIsAdmin ? 'admin' : 'no-admin'}`);
+      setIsAdmin(newIsAdmin);
+    }
+  }, [user, isAdmin]);
+  
+  // Efecto de evaluación de ruta
+  useEffect(() => {
+    // Solo proceder si hemos verificado la autenticación local y no estamos cargando
+    if (!localAuthChecked || loading || redirecting) {
       return;
     }
     
-    PerformanceLogger.startTimer('protected-route-evaluation');
-    PerformanceLogger.logEvent('🛡️ ProtectedRoute siendo evaluado', {
-      pathname: location.pathname,
-      isAuthenticated,
-      isLocallyAuthenticated,
-      loading,
-      userRole: user?.rol,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Verificar si ya estamos redirigiendo para evitar bucles
-    if (redirecting) {
-      PerformanceLogger.logEvent('🛡️ ProtectedRoute - Ya estamos redirigiendo, evitando evaluación');
-      return;
-    }
-    
-    // Si estamos cargando, no hacer nada más
-    if (loading) {
-      return;
-    }
-    
-    // Usar la combinación de ambas verificaciones de autenticación para mayor estabilidad
-    // Consideramos autenticado si cualquiera de las dos verificaciones es positiva
+    // Considerar autenticado si cualquiera de las dos verificaciones es positiva
     const isEffectivelyAuthenticated = isAuthenticated || isLocallyAuthenticated;
     
     // Determinar si necesitamos redirigir basado en autenticación y roles
@@ -108,45 +147,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) =
     if (!isEffectivelyAuthenticated) {
       shouldRedirect = true;
       targetPath = redirectPath;
-      PerformanceLogger.logEvent('🛡️ ProtectedRoute - Necesita redirección por falta de autenticación', {
-        from: location.pathname,
-        to: targetPath,
-        isAuthenticated,
-        isLocallyAuthenticated
-      });
+      console.log(`🛡️ [${componentId}] Redirección por falta de autenticación: ${location.pathname} -> ${targetPath}`);
     } else {
-      // Determinar si el usuario es administrador
-      // Usar tanto el contexto como la verificación local
-      let isAdmin = false;
-      
-      if (user?.rol === true) {
-        isAdmin = true;
-      } else {
-        const localUserDataStr = localStorage.getItem('userData');
-        if (localUserDataStr) {
-          try {
-            const localUserData = JSON.parse(localUserDataStr);
-            if (localUserData.rol === true) {
-              isAdmin = true;
-            }
-          } catch (e) {
-            // Ignorar errores al leer datos locales
-          }
-        }
-      }
-      
       // Verificar permisos basados en roles
       const isAdminRoute = location.pathname.startsWith('/admin');
       
-      PerformanceLogger.logEvent('🛡️ ProtectedRoute - Verificando permisos', {
-        pathname: location.pathname,
-        isAdminRoute,
-        isAdmin,
-        userRole: user?.rol
-      });
-      
       // Usuario regular intentando acceder a rutas de admin
-      if (isAdminRoute && !isAdmin) {
+      if (isAdminRoute && isAdmin === false) {
         shouldRedirect = true;
         
         // Ruta específica de admin/translator para usuario normal
@@ -157,20 +164,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) =
           targetPath = '/translator';
         }
         
-        PerformanceLogger.logEvent('🛡️ ProtectedRoute - Usuario regular intentando acceder a zona admin', {
-          from: location.pathname,
-          to: targetPath
-        });
+        console.log(`🛡️ [${componentId}] Usuario regular en zona admin: redirección ${location.pathname} -> ${targetPath}`);
       } 
       // Admin intentando acceder a traductor regular
-      else if (location.pathname === '/translator' && isAdmin) {
+      else if (location.pathname === '/translator' && isAdmin === true) {
         shouldRedirect = true;
         targetPath = '/admin/translator';
         
-        PerformanceLogger.logEvent('🛡️ ProtectedRoute - Admin intentando acceder a traductor regular', {
-          from: location.pathname,
-          to: targetPath
-        });
+        console.log(`🛡️ [${componentId}] Admin en traductor regular: redirección ${location.pathname} -> ${targetPath}`);
       }
     }
     
@@ -178,32 +179,33 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) =
     if (shouldRedirect && targetPath !== '' && targetPath !== location.pathname) {
       // Evitar bucles de redirección
       const lastRedirect = sessionStorage.getItem('lastRedirect');
+      
       if (lastRedirect) {
-        const { from, to, timestamp } = JSON.parse(lastRedirect);
-        const now = new Date().getTime();
-        const lastRedirectTime = new Date(timestamp).getTime();
-        
-        // Si estamos intentando redirigir a un lugar desde donde ya fuimos redirigidos en los últimos 2 segundos
-        if (from === targetPath && to === location.pathname && (now - lastRedirectTime) < 2000) {
-          PerformanceLogger.logEvent('🛡️ ProtectedRoute - Detectado posible bucle de redirección, cancelando', {
-            wouldRedirectFrom: location.pathname,
-            wouldRedirectTo: targetPath,
-            previousRedirect: { from, to, timeSince: now - lastRedirectTime }
-          });
+        try {
+          const { from, to, timestamp } = JSON.parse(lastRedirect);
+          const now = new Date().getTime();
+          const lastRedirectTime = new Date(timestamp).getTime();
           
-          // Forzar renderizado del outlet para romper el bucle
-          shouldRedirect = false;
-        } else {
-          // Registrar esta redirección para futuras comprobaciones
-          sessionStorage.setItem('lastRedirect', JSON.stringify({
-            from: location.pathname,
-            to: targetPath,
-            timestamp: new Date().toISOString()
-          }));
-          
-          // Marcar que estamos redirigiendo
-          setRedirecting(true);
-          setRedirectTo(targetPath);
+          // Si estamos intentando redirigir a un lugar desde donde ya fuimos redirigidos en los últimos 2 segundos
+          if (from === targetPath && to === location.pathname && (now - lastRedirectTime) < 2000) {
+            console.warn(`⚠️ [${componentId}] ¡BUCLE DETECTADO! Cancelando redirección ${location.pathname} -> ${targetPath}`);
+            console.warn(`⚠️ [${componentId}] Redirección previa: ${from} -> ${to} hace ${(now - lastRedirectTime)}ms`);
+            shouldRedirect = false;
+          } else {
+            // Registrar esta redirección para futuras comprobaciones
+            sessionStorage.setItem('lastRedirect', JSON.stringify({
+              from: location.pathname,
+              to: targetPath,
+              timestamp: new Date().toISOString()
+            }));
+            
+            console.log(`➡️ [${componentId}] Iniciando redirección ${location.pathname} -> ${targetPath}`);
+            setRedirecting(true);
+            setRedirectTo(targetPath);
+          }
+        } catch (e) {
+          console.error(`❌ [${componentId}] Error al procesar lastRedirect:`, e);
+          shouldRedirect = false; // Prevenir redirección si hay error en el parsing
         }
       } else {
         // Primera redirección, registrarla
@@ -213,102 +215,63 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = '/' }) =
           timestamp: new Date().toISOString()
         }));
         
-        // Marcar que estamos redirigiendo
+        console.log(`➡️ [${componentId}] Primera redirección ${location.pathname} -> ${targetPath}`);
         setRedirecting(true);
         setRedirectTo(targetPath);
       }
     }
-    
-    return () => {
-      PerformanceLogger.endTimer('protected-route-evaluation');
-      PerformanceLogger.logEvent('🛡️ ProtectedRoute finalizado', {
-        pathname: location.pathname
-      });
-    };
-  }, [isAuthenticated, loading, user, location.pathname, redirectPath, redirecting, localAuthChecked, isLocallyAuthenticated]);
+  }, [
+    isAuthenticated,
+    loading, 
+    localAuthChecked, 
+    isLocallyAuthenticated, 
+    location.pathname, 
+    redirectPath, 
+    redirecting,
+    isAdmin
+  ]);
   
-  // Si todavía estamos verificando la autenticación local, mostrar indicador de carga
-  if (!localAuthChecked) {
-    PerformanceLogger.logEvent('🛡️ ProtectedRoute - Verificando autenticación local', {
-      pathname: location.pathname
-    });
-    
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Verificando autenticación...</p>
-      </div>
-    );
+  // Decidir qué renderizar basado en el estado
+  if (!localAuthChecked || loading) {
+    return <LoadingIndicator />;
   }
   
-  // Registrar el estado de carga del contexto de autenticación
-  if (loading) {
-    PerformanceLogger.logEvent('🛡️ ProtectedRoute - En estado de carga', {
-      pathname: location.pathname
-    });
-    
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Verificando autenticación...</p>
-      </div>
-    );
-  }
-  
-  // Si estamos redirigiendo, hacerlo
   if (redirecting && redirectTo) {
-    PerformanceLogger.logEvent('🛡️ ProtectedRoute - Ejecutando redirección', {
-      from: location.pathname,
-      to: redirectTo
-    });
-    
-    return <Navigate to={redirectTo} replace />;
+    return <RedirectComponent to={redirectTo} />;
   }
   
   // Determinar si tenemos acceso efectivo
   const hasEffectiveAccess = isAuthenticated || isLocallyAuthenticated;
   
-  // Si no estamos autenticados en ninguna de las verificaciones, redirigir a login
+  // Si no estamos autenticados, redirigir a login
   if (!hasEffectiveAccess) {
-    PerformanceLogger.logEvent('🛡️ ProtectedRoute - Redirigiendo a login (no autenticado)', {
-      redirectPath,
-      from: location.pathname,
-      isAuthenticated,
-      isLocallyAuthenticated
-    });
-    
-    return <Navigate to={redirectPath} replace />;
+    return <RedirectComponent to={redirectPath} />;
   }
   
-  // Renderizar las rutas anidadas si está autenticado y tiene los permisos correctos
-  PerformanceLogger.logEvent('🛡️ ProtectedRoute - Acceso permitido', {
-    pathname: location.pathname,
-    userRole: user?.rol,
-    isAuthenticated,
-    isLocallyAuthenticated
-  });
-  
-  PerformanceLogger.startTimer('outlet-render');
-  
-  // Crear un wrapper para monitorear el renderizado del componente
-  const OutletWithMonitoring = () => {
-    useEffect(() => {
-      PerformanceLogger.logEvent('🛡️ Outlet montado', {
-        pathname: location.pathname
-      });
-      
-      return () => {
-        PerformanceLogger.endTimer('outlet-render');
-        PerformanceLogger.logEvent('🛡️ Outlet desmontado', {
-          pathname: location.pathname
-        });
-      };
-    }, []);
-    
-    return <Outlet />;
-  };
-  
+  // Renderizar el Outlet con monitoreo si todo está bien
   return <OutletWithMonitoring />;
 };
 
-export default ProtectedRoute;
+// El componente principal es muy simple y usa la lógica aislada
+const ProtectedRoute: React.FC<ProtectedRouteProps> = (props) => {
+  const componentId = useRef(`pr-main-${generateId()}`).current;
+  const renderCount = useRef(0);
+  
+  renderCount.current++;
+  
+  // Log de montaje/desmontaje del componente
+  useEffect(() => {
+    console.log(`🟢 [${componentId}] ProtectedRoute PRINCIPAL MONTADO`);
+    
+    return () => {
+      console.log(`🔴 [${componentId}] ProtectedRoute PRINCIPAL DESMONTADO`);
+    };
+  }, []);
+  
+  console.log(`🔄 [${componentId}] ProtectedRoute PRINCIPAL renderizado #${renderCount.current}`);
+  
+  return <ProtectedRouteLogic {...props} />;
+};
+
+// Aplicar memo al componente completo
+export default memo(ProtectedRoute);
