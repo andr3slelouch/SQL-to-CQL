@@ -14,9 +14,9 @@ class HttpService {
   constructor() {
     // Configuración de URLs base para cada microservicio
     this.baseUrls = {
-      auth: 'http://localhost:3001/api',         // Servicio de autenticación
-      permissions: 'http://localhost:3002/api',  // Servicio de permisos
-      translator: 'http://localhost:3000/api'    // Servicio de traducción
+      auth: 'http://localhost:3001/api', // Servicio de autenticación
+      permissions: 'http://localhost:3002/api', // Servicio de permisos
+      translator: 'http://localhost:3000/api' // Servicio de traducción
     };
   }
 
@@ -35,26 +35,26 @@ class HttpService {
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     // Determinar qué servicio usar (por defecto, translator)
     const service = options.service || 'translator';
+    
     // Construir la URL correcta para el servicio
     const url = `${this.baseUrls[service]}${endpoint}`;
-    
     console.log(`Servicio seleccionado: ${service}`);
     console.log(`URL completa: ${url}`);
-
+    
     // Configurar encabezados predeterminados
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.getAuthHeaders(),
       ...(options.headers || {})
     };
-
+    
     // Preparar el cuerpo de la solicitud si existe
     let body;
     if (options.body) {
       body = JSON.stringify(options.body);
       console.log('Cuerpo de la petición:', options.body);
     }
-
+    
     // Configurar opciones de la solicitud
     const requestOptions: RequestInit = {
       method: options.method || 'GET',
@@ -62,11 +62,11 @@ class HttpService {
       body,
       credentials: 'include' // Para soportar cookies si se utilizan
     };
-
+    
     try {
       console.log(`Realizando petición a: ${url}`);
       const response = await fetch(url, requestOptions);
-
+      
       // Manejar errores de respuesta HTTP
       if (!response.ok) {
         if (response.status === 401) {
@@ -79,10 +79,11 @@ class HttpService {
         // Intentar obtener detalles del error desde la respuesta
         const errorData = await response.json().catch(() => null);
         console.error('Error en la respuesta:', errorData);
+        
         const errorMessage = errorData?.message || `Error ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
-
+      
       // Verificar si la respuesta contiene datos JSON
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -114,7 +115,7 @@ class HttpService {
     return this.request<T>(endpoint, { method: 'PUT', body, ...options });
   }
 
-  async delete<T>(endpoint: string, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<T> {
+  async delete<T>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE', ...options });
   }
 }
