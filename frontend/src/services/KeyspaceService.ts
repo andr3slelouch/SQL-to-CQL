@@ -16,6 +16,16 @@ class KeyspaceService {
   private isLoadingKeyspaces: boolean = false;
 
   /**
+   * Limpia la caché de keyspaces
+   * Debe llamarse cuando el usuario cierra sesión o cambia
+   */
+  clearCache(): void {
+    localStorage.removeItem('cachedKeyspaces');
+    localStorage.removeItem('cachedUserCedula');
+    this.isLoadingKeyspaces = false;
+  }
+
+  /**
    * Obtiene las bases de datos (keyspaces) a las que el usuario tiene acceso
    * @returns Lista de keyspaces disponibles para el usuario
    */
@@ -27,9 +37,16 @@ class KeyspaceService {
         const checkInterval = setInterval(() => {
           if (!this.isLoadingKeyspaces) {
             clearInterval(checkInterval);
-            // Intentar obtener keyspaces de localStorage
-            const cachedKeyspaces = localStorage.getItem('cachedKeyspaces');
-            resolve(cachedKeyspaces ? JSON.parse(cachedKeyspaces) : []);
+            // Obtener keyspaces de caché pero verificar que sea del usuario actual
+            const currentUser = AuthService.getCurrentUser();
+            const cachedUserCedula = localStorage.getItem('cachedUserCedula');
+            
+            if (currentUser && cachedUserCedula === currentUser.cedula) {
+              const cachedKeyspaces = localStorage.getItem('cachedKeyspaces');
+              resolve(cachedKeyspaces ? JSON.parse(cachedKeyspaces) : []);
+            } else {
+              resolve([]);
+            }
           }
         }, 100);
         // Timeout para evitar espera infinita
@@ -44,9 +61,21 @@ class KeyspaceService {
     try {
       // Obtener el usuario actual del servicio de autenticación
       const user = AuthService.getCurrentUser();
-      if (!user) {
-        throw new Error('Usuario no autenticado');
+      if (!user || !user.cedula) {
+        console.error('Usuario no autenticado o sin cédula');
+        this.clearCache(); // Limpiar caché si no hay usuario
+        return [];
       }
+
+      // Verificar si el caché es del usuario actual
+      const cachedUserCedula = localStorage.getItem('cachedUserCedula');
+      if (cachedUserCedula && cachedUserCedula !== user.cedula) {
+        // Si el caché es de otro usuario, limpiarlo
+        console.log('Limpiando caché de usuario anterior');
+        this.clearCache();
+      }
+
+      console.log('Obteniendo keyspaces para usuario:', user.cedula);
 
       // Usar el servicio de permisos con el proxy configurado
       const response = await HttpService.get<UserPermissionsResponse>(
@@ -56,21 +85,31 @@ class KeyspaceService {
       
       console.log('Keyspaces obtenidos:', response.keyspaces);
       
-      // Guardar los keyspaces en localStorage para futuras referencias rápidas
-      if (response.keyspaces && response.keyspaces.length > 0) {
+      // Guardar los keyspaces en localStorage junto con la cédula del usuario
+      if (response.keyspaces) {
         localStorage.setItem('cachedKeyspaces', JSON.stringify(response.keyspaces));
+        localStorage.setItem('cachedUserCedula', user.cedula);
       }
       
       // Extraer el array de keyspaces
       return response.keyspaces || [];
+      
     } catch (error) {
       console.error('Error al obtener keyspaces del usuario:', error);
-      // En caso de error, intentar usar la caché
-      const cachedKeyspaces = localStorage.getItem('cachedKeyspaces');
-      if (cachedKeyspaces) {
-        return JSON.parse(cachedKeyspaces);
+      
+      // En caso de error, intentar usar la caché solo si es del usuario actual
+      const currentUser = AuthService.getCurrentUser();
+      const cachedUserCedula = localStorage.getItem('cachedUserCedula');
+      
+      if (currentUser && cachedUserCedula === currentUser.cedula) {
+        const cachedKeyspaces = localStorage.getItem('cachedKeyspaces');
+        if (cachedKeyspaces) {
+          console.log('Usando keyspaces desde caché para el usuario actual');
+          return JSON.parse(cachedKeyspaces);
+        }
       }
-      // Devolvemos un array vacío en caso de error y sin caché
+      
+      // Devolvemos un array vacío en caso de error y sin caché válido
       return [];
     } finally {
       this.isLoadingKeyspaces = false;

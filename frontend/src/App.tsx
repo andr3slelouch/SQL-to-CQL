@@ -2,6 +2,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
+import Registro from './components/Registro';
+import CambioContrasena from './components/CambioContrasena';
 import TranslatorPage from './components/TranslatorPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
@@ -15,6 +17,8 @@ import ConfigurePermissionsPage from './pages/ConfigurePermissionsPage';
 
 // Estilos
 import './styles/LoginPage.css';
+import './styles/Registro.css';
+import './styles/CambioContrasena.css';
 import './styles/AdminLayout.css';
 import './styles/AdminTranslatorPage.css';
 
@@ -24,9 +28,11 @@ const App: React.FC = () => {
       <Router>
         <div className="App">
           <Routes>
-            {/* Ruta pública: Login */}
+            {/* Rutas públicas */}
             <Route path="/" element={<LoginPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/registro" element={<Registro />} />
+            <Route path="/reset-password" element={<CambioContrasena />} />
             
             {/* Rutas protegidas */}
             <Route element={<ProtectedRoute />}>

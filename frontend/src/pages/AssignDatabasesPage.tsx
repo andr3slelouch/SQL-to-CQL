@@ -1,10 +1,11 @@
 // src/pages/AssignDatabasesPage.tsx
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../components/layouts/AdminLayout';
+import AssignDatabasesService from '../services/AssingDatabases';
 import '../styles/AssignDatabasesPage.css'; // Import the specific CSS file
 
 interface Database {
-  id: number;
+  id: string;
   name: string;
   active: boolean;
 }
@@ -12,8 +13,8 @@ interface Database {
 interface User {
   nombre: string;
   cedula: string;
-  rol: string;
-  databases?: number[]; // IDs of databases the user has access to
+  rol: boolean;
+  keyspaces?: string[];
 }
 
 // Modal types
@@ -31,27 +32,27 @@ const AssignDatabasesPage: React.FC = () => {
   const [modalType, setModalType] = useState<ModalType>(null);
   const [modalMessage, setModalMessage] = useState('');
 
-  // Simulate loading databases from an API
+  // Load all available keyspaces on component mount
   useEffect(() => {
-    // In a real application, this would be an API call
+    // Load all keyspaces from API
     const fetchDatabases = async () => {
       try {
         setLoading(true);
         
-        // Simulate API request delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Call the service to get all keyspaces
+        const response = await AssignDatabasesService.getAllKeyspaces();
         
-        // Mock database data
-        const mockDatabases = [
-          { id: 1, name: 'Nombre Base de Datos 1', active: false },
-          { id: 2, name: 'Nombre Base de Datos 2', active: false },
-          { id: 3, name: 'Nombre Base de Datos N', active: false }
-        ];
+        // Map the keyspaces to the format expected by the component
+        const keyspacesData = response.allKeyspaces.map((keyspace: string) => ({
+          id: keyspace,
+          name: keyspace,
+          active: false
+        }));
         
-        setDatabases(mockDatabases);
+        setDatabases(keyspacesData);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching databases:', error);
+        console.error('Error fetching keyspaces:', error);
         showModal('error', 'Error al cargar las bases de datos');
         setLoading(false);
       }
@@ -93,49 +94,63 @@ const AssignDatabasesPage: React.FC = () => {
     setLoading(true);
     
     try {
-      // Simulate API request
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Call the service to get user keyspaces
+      const response = await AssignDatabasesService.getUserKeyspaces(searchQuery);
       
-      // Mock user data - in a real app, this would come from your API
-      // For demonstration, let's simulate user not found when searchQuery is "9999"
-      if (searchQuery === '9999') {
-        setLoading(false);
-        showModal('error', 'No existe usuario');
-        return;
-      }
-      
-      const mockUser: User = {
-        nombre: 'Usuario Ejemplo',
-        cedula: searchQuery,
-        rol: 'Administrador',
-        databases: [1, 3] // IDs of databases the user has access to
+      // Extract user data
+      const userData = {
+        nombre: response.nombre,
+        cedula: response.cedula,
+        rol: response.rol,
+        keyspaces: response.keyspaces || []
       };
       
-      setUser(mockUser);
+      setUser(userData);
       
-      // Update the active state of databases based on user permissions
-      setDatabases(prevDatabases => 
-        prevDatabases.map(db => ({
-          ...db,
-          active: mockUser.databases?.includes(db.id) || false
-        }))
-      );
+      // Update the active state of databases
+      // If the user is admin, activate all databases
+      if (userData.rol === true) {
+        setDatabases(prevDatabases => 
+          prevDatabases.map(db => ({
+            ...db,
+            active: true // Set all databases to active for admin
+          }))
+        );
+      } else {
+        // For regular users, only activate those in their keyspaces
+        setDatabases(prevDatabases => 
+          prevDatabases.map(db => ({
+            ...db,
+            active: userData.keyspaces?.includes(db.id) || false
+          }))
+        );
+      }
       
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error searching for user:', error);
-      showModal('error', 'Error al buscar el usuario');
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('No se encontró un usuario')) {
+        showModal('error', 'No existe usuario');
+      } else {
+        showModal('error', 'Error al buscar el usuario');
+      }
+      
       setLoading(false);
     }
   };
 
   // Handle database toggle
-  const handleToggleDatabase = (id: number) => {
-    setDatabases(prevDatabases =>
-      prevDatabases.map(db =>
-        db.id === id ? { ...db, active: !db.active } : db
-      )
-    );
+  const handleToggleDatabase = (id: string) => {
+    // Only allow toggling if user is not admin
+    if (user && !user.rol) {
+      setDatabases(prevDatabases =>
+        prevDatabases.map(db =>
+          db.id === id ? { ...db, active: !db.active } : db
+        )
+      );
+    }
   };
 
   // Handle save button click - now shows confirmation modal
@@ -158,16 +173,12 @@ const AssignDatabasesPage: React.FC = () => {
       setSaving(true);
       
       // Get the IDs of active databases
-      const activeDatabaseIds = databases
+      const activeKeyspaces = databases
         .filter(db => db.active)
         .map(db => db.id);
       
-      // In a real app, you would send this data to your API
-      console.log('User ID:', user.cedula);
-      console.log('Assigned databases:', activeDatabaseIds);
-      
-      // Simulate API request
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Send the data using the service
+      await AssignDatabasesService.updateUserKeyspaces(user.cedula, activeKeyspaces);
       
       setSaving(false);
       
@@ -200,6 +211,12 @@ const AssignDatabasesPage: React.FC = () => {
     if (e.key === 'Enter') {
       handleSearch();
     }
+  };
+
+  // Format the role for display
+  const formatRole = (rol: boolean | undefined) => {
+    if (rol === undefined) return '';
+    return rol === true ? 'Administrador' : 'Usuario Común';
   };
 
   return (
@@ -332,7 +349,7 @@ const AssignDatabasesPage: React.FC = () => {
                   type="text"
                   id="rol"
                   className="admin-input"
-                  value={user?.rol || ''}
+                  value={formatRole(user?.rol)}
                   readOnly
                   placeholder="Rol del usuario"
                 />
@@ -356,7 +373,7 @@ const AssignDatabasesPage: React.FC = () => {
                         type="checkbox"
                         checked={db.active}
                         onChange={() => handleToggleDatabase(db.id)}
-                        disabled={loading || saving || !user}
+                        disabled={loading || saving || !user || (user.rol === true)}
                       />
                       <span className="toggle-slider"></span>
                     </label>
@@ -365,7 +382,7 @@ const AssignDatabasesPage: React.FC = () => {
               </div>
             )}
             
-            {/* Save button - only enabled when a user is selected and not in search/save mode */}
+            {/* Save button - enabled for all users, including admins */}
             <div className="button-container">
               <button
                 type="button"
@@ -380,6 +397,13 @@ const AssignDatabasesPage: React.FC = () => {
             {!user && databases.length > 0 && (
               <div className="user-instruction-message">
                 Busque un usuario para asignar bases de datos
+              </div>
+            )}
+
+            {user?.rol === true && (
+              <div className="user-instruction-message">
+                Este usuario es administrador y tiene acceso a todas las bases de datos.
+                Puede guardar para actualizar las bases a las que tiene acceso.
               </div>
             )}
           </div>

@@ -60,6 +60,15 @@ const TranslatorPage: React.FC = () => {
     // Esta función se ejecutará de manera asíncrona sin bloquear el renderizado
     const fetchDatabases = async () => {
       try {
+        // Verificar si el usuario actual cambió
+        const currentUser = AuthService.getCurrentUser();
+        const cachedUserCedula = localStorage.getItem('cachedUserCedula');
+        
+        if (currentUser && cachedUserCedula && cachedUserCedula !== currentUser.cedula) {
+          console.log('Detectado cambio de usuario, limpiando caché');
+          KeyspaceService.clearCache();
+        }
+        
         // Obtener keyspaces del usuario desde el backend
         const keyspaces = await KeyspaceService.getUserKeyspaces();
         console.log("Keyspaces obtenidos:", keyspaces);
