@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../components/layouts/AdminLayout';
 import PermissionsService from '../services/PermissionsService';
+import ChangeRoleService from '../services/ChangeRoleService';
 import '../styles/ConfigurePermissions.css';
 
 interface Permission {
@@ -24,9 +25,9 @@ const ConfigurePermissionsPage: React.FC = () => {
   const [permissionsChanged, setPermissionsChanged] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [previousSearch, setPreviousSearch] = useState('');
+  const [originalRol, setOriginalRol] = useState('Usuario Común');
 
-  // Lista de permisos con los IDs exactos que espera el backend según AVAILABLE_OPERATIONS
-  // Ordenados alfabéticamente por el nombre visible (name)
+  // Lista de permisos con los IDs exactos que espera el backend
   const [permissions, setPermissions] = useState<Permission[]>([
     { id: 'ALTER KEYSPACE', name: 'Alter Keyspace', active: false },
     { id: 'ALTER TABLE ADD', name: 'Alter Table Add', active: false },
@@ -50,31 +51,30 @@ const ConfigurePermissionsPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    // Detectar cambios en los permisos comparando con el estado original
+    // Detectar cambios en los permisos o en el rol
     if (originalPermissions.length > 0) {
-      const hasChanges = permissions.some(perm => {
+      const hasPermissionChanges = permissions.some(perm => {
         const original = originalPermissions.find(orig => orig.id === perm.id);
         return original && original.active !== perm.active;
       });
-      setPermissionsChanged(hasChanges);
+      
+      const hasRolChange = rol !== originalRol;
+      
+      setPermissionsChanged(hasPermissionChanges || hasRolChange);
     }
-  }, [permissions, originalPermissions]);
+  }, [permissions, originalPermissions, rol, originalRol]);
 
   // Función para mapear permisos del backend al formato del frontend
   const mapPermissionsFromBackend = (operaciones: string[], operacionesDisponibles: string[]) => {
-    // Verificar que las operaciones existan
     if (!operaciones || !operacionesDisponibles) {
       console.error('Error: operaciones o operacionesDisponibles es undefined');
       return permissions;
     }
-
-    // Log para depuración
+    
     console.log('Operaciones del usuario:', operaciones);
     console.log('Operaciones disponibles:', operacionesDisponibles);
     
-    // Mapear cada permiso
     const mappedPermissions = permissions.map(perm => {
-      // Verificar si la operación está activa para este usuario
       const isActive = operaciones.includes(perm.id);
       return {
         ...perm,
@@ -93,7 +93,6 @@ const ConfigurePermissionsPage: React.FC = () => {
       return;
     }
 
-    // Si hay cambios pendientes y se está buscando un usuario diferente
     if (permissionsChanged && searchQuery !== previousSearch) {
       setErrorMessage('Tienes cambios sin guardar. Guarda los cambios antes de buscar otro usuario.');
       setErrorDialog(true);
@@ -104,35 +103,42 @@ const ConfigurePermissionsPage: React.FC = () => {
     try {
       const response = await PermissionsService.getUserPermissions(searchQuery);
       
-      // Actualizar la información del usuario
+      console.log('Respuesta del servidor:', response);
+      console.log('Rol del usuario:', response.rol);
+      
       setNombre(response.nombre);
       setCedula(response.cedula);
-      setRol(response.rol ? 'Administrador' : 'Usuario Común');
+      
+      // Establecer el rol actual y original basado en el valor booleano
+      const userRol = response.rol ? 'Administrador' : 'Usuario Común';
+      setRol(userRol);
+      setOriginalRol(userRol);
       setIsAdmin(response.rol);
       
-      // Importante: Restablecer los permisos antes de mapear los nuevos
-      // Esto garantiza que los switches se actualicen correctamente
+      console.log('Rol establecido:', userRol);
+      console.log('Es admin:', response.rol);
+      
       const defaultPermissions = permissions.map(perm => ({ ...perm, active: false }));
       setPermissions(defaultPermissions);
       
-      // Luego mapear y actualizar con los permisos del usuario buscado
       const mappedPermissions = mapPermissionsFromBackend(
         response.operaciones, 
         response.operacionesDisponibles
       );
       
       setPermissions(mappedPermissions);
-      setOriginalPermissions([...mappedPermissions]); // Guardar copia original
+      setOriginalPermissions([...mappedPermissions]);
       setPermissionsChanged(false);
       setPreviousSearch(searchQuery);
     } catch (error: any) {
       console.error('Error al buscar usuario:', error);
       setErrorMessage(error.message || 'No se encontró un usuario con la cédula proporcionada');
       setErrorDialog(true);
-      // Limpiar campos
+      
       setNombre('');
       setCedula('');
       setRol('Usuario Común');
+      setOriginalRol('Usuario Común');
       setIsAdmin(false);
     } finally {
       setIsLoading(false);
@@ -152,7 +158,6 @@ const ConfigurePermissionsPage: React.FC = () => {
 
   // Manejar cambio en un permiso
   const handleTogglePermission = (id: string) => {
-    // Permitir cambios en permisos para todos los usuarios, incluidos administradores
     setPermissions(prevPermissions =>
       prevPermissions.map(perm =>
         perm.id === id ? { ...perm, active: !perm.active } : perm
@@ -168,7 +173,7 @@ const ConfigurePermissionsPage: React.FC = () => {
       return;
     }
     
-    if (!permissionsChanged && rol === (isAdmin ? 'Administrador' : 'Usuario Común')) {
+    if (!permissionsChanged) {
       setErrorMessage('No se han realizado cambios');
       setErrorDialog(true);
       return;
@@ -183,7 +188,16 @@ const ConfigurePermissionsPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Crear lista de operaciones cambiadas
+      // Determinar si cambió el rol comparando con el rol original
+      const currentIsAdmin = rol === 'Administrador';
+      const originalIsAdmin = originalRol === 'Administrador';
+      const rolChanged = currentIsAdmin !== originalIsAdmin;
+      
+      console.log('Rol actual:', rol, 'es admin:', currentIsAdmin);
+      console.log('Rol original:', originalRol, 'era admin:', originalIsAdmin);
+      console.log('¿Cambió el rol?:', rolChanged);
+      
+      // PASO 1: Primero actualizar los permisos
       const changedOperations = permissions
         .filter(perm => {
           const original = originalPermissions.find(orig => orig.id === perm.id);
@@ -193,15 +207,33 @@ const ConfigurePermissionsPage: React.FC = () => {
           name: perm.id,
           enabled: perm.active
         }));
-
-      // Si hay cambios en los permisos, enviarlos
+        
       if (changedOperations.length > 0) {
-        console.log('Enviando cambios de permisos:', changedOperations);
+        console.log('Paso 1: Enviando cambios de permisos:', changedOperations);
         await PermissionsService.updateMultiplePermissions(cedula, changedOperations);
+        console.log('Permisos actualizados exitosamente');
       }
       
-      // Actualizar permisos en el estado
+      // PASO 2: Después actualizar el rol si cambió
+      if (rolChanged) {
+        console.log('Paso 2: Actualizando rol del usuario a:', currentIsAdmin ? 'Administrador' : 'Usuario Común');
+        await ChangeRoleService.updateUserRole(cedula, currentIsAdmin);
+        console.log('Rol actualizado exitosamente');
+      }
+      
+      // PASO 3: Actualizar toda la información del usuario desde el servidor
+      console.log('Paso 3: Obteniendo estado actualizado del servidor');
       const updatedUser = await PermissionsService.getUserPermissions(cedula);
+      
+      // Actualizar el estado local con la respuesta del servidor
+      const newRol = updatedUser.rol ? 'Administrador' : 'Usuario Común';
+      setRol(newRol);
+      setOriginalRol(newRol);
+      setIsAdmin(updatedUser.rol);
+      
+      console.log('Estado final - Rol:', newRol, 'isAdmin:', updatedUser.rol);
+      
+      // Actualizar permisos
       const mappedPermissions = mapPermissionsFromBackend(
         updatedUser.operaciones, 
         updatedUser.operacionesDisponibles
@@ -234,7 +266,7 @@ const ConfigurePermissionsPage: React.FC = () => {
     setErrorDialog(false);
   };
 
-  // Dividir los permisos en 3 columnas - ajustado al nuevo tamaño del array
+  // Dividir los permisos en 3 columnas
   const permissionsPerColumn = Math.ceil(permissions.length / 3);
   const leftPermissions = permissions.slice(0, permissionsPerColumn);
   const middlePermissions = permissions.slice(permissionsPerColumn, 2 * permissionsPerColumn);
@@ -263,6 +295,7 @@ const ConfigurePermissionsPage: React.FC = () => {
             </button>
           </div>
         </div>
+
         <div className="user-info-row">
           <div className="user-field">
             <label>Nombre</label>
@@ -292,7 +325,7 @@ const ConfigurePermissionsPage: React.FC = () => {
               value={rol}
               onChange={handleRolChange}
               className="user-input role-select"
-              disabled={!cedula || isAdmin} // Mantener deshabilitado si es admin
+              disabled={!cedula} // Solo deshabilitado si no hay usuario cargado
               id="user-rol"
               name="user-rol"
             >
@@ -301,6 +334,7 @@ const ConfigurePermissionsPage: React.FC = () => {
             </select>
           </div>
         </div>
+
         <div className="permissions-grid">
           <div className="permissions-column">
             {leftPermissions.map(permission => (
@@ -311,7 +345,7 @@ const ConfigurePermissionsPage: React.FC = () => {
                     type="checkbox"
                     checked={permission.active}
                     onChange={() => handleTogglePermission(permission.id)}
-                    disabled={false} // Ya no está deshabilitado para admins
+                    disabled={false}
                     id={`permission-${permission.id}`}
                     name={`permission-${permission.id}`}
                   />
@@ -320,6 +354,7 @@ const ConfigurePermissionsPage: React.FC = () => {
               </div>
             ))}
           </div>
+          
           <div className="permissions-column">
             {middlePermissions.map(permission => (
               <div key={permission.id} className="permission-row">
@@ -329,7 +364,7 @@ const ConfigurePermissionsPage: React.FC = () => {
                     type="checkbox"
                     checked={permission.active}
                     onChange={() => handleTogglePermission(permission.id)}
-                    disabled={false} // Ya no está deshabilitado para admins
+                    disabled={false}
                     id={`permission-${permission.id}`}
                     name={`permission-${permission.id}`}
                   />
@@ -338,6 +373,7 @@ const ConfigurePermissionsPage: React.FC = () => {
               </div>
             ))}
           </div>
+          
           <div className="permissions-column">
             {rightPermissions.map(permission => (
               <div key={permission.id} className="permission-row">
@@ -347,7 +383,7 @@ const ConfigurePermissionsPage: React.FC = () => {
                     type="checkbox"
                     checked={permission.active}
                     onChange={() => handleTogglePermission(permission.id)}
-                    disabled={false} // Ya no está deshabilitado para admins
+                    disabled={false}
                     id={`permission-${permission.id}`}
                     name={`permission-${permission.id}`}
                   />
@@ -357,16 +393,18 @@ const ConfigurePermissionsPage: React.FC = () => {
             ))}
           </div>
         </div>
+
         <div className="save-container">
           <button
             className="save-button"
             onClick={handleSave}
-            disabled={isLoading || (!permissionsChanged && rol === (isAdmin ? 'Administrador' : 'Usuario Común'))}
+            disabled={isLoading || !permissionsChanged}
           >
             {isLoading ? 'Guardando...' : 'Guardar'}
           </button>
         </div>
       </div>
+
       {/* Dialog de confirmación */}
       {confirmDialog && (
         <div className="dialog-overlay">
@@ -393,6 +431,7 @@ const ConfigurePermissionsPage: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Dialog de éxito */}
       {successDialog && (
         <div className="dialog-overlay">
@@ -411,6 +450,7 @@ const ConfigurePermissionsPage: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Dialog de error */}
       {errorDialog && (
         <div className="dialog-overlay">

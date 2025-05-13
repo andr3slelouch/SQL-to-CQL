@@ -1,6 +1,7 @@
 // src/components/CambioContrasena.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ChangePasswordService from '../services/ChangePasswordService';
 import '../styles/CambioContrasena.css';
 
 // Interfaces para tipado
@@ -37,7 +38,7 @@ const CambioContrasena: React.FC = () => {
   const [error, setError] = useState<ErrorState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>(null);
-  const [temporaryPin, setTemporaryPin] = useState<string>('');
+  const [newGeneratedPin, setNewGeneratedPin] = useState<string>('');
 
   const handleStep1Change = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -113,26 +114,27 @@ const CambioContrasena: React.FC = () => {
     setError(null);
   
     try {
-      // TODO: Aquí irá la verificación del PIN con la API
-      // Simulación de llamada al API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Verificar las credenciales con el servicio
+      const verifyResponse = await ChangePasswordService.verifyCredentials({
+        nombre: formDataStep1.nombre,
+        cedula: formDataStep1.cedula,
+        pin: formDataStep1.pin
+      });
       
-      // Simulación: verificar si es un PIN temporal del admin o PIN del usuario
-      const isTemporaryPin = formDataStep1.pin.startsWith('TEMP'); // Lógica de ejemplo
-      
-      if (isTemporaryPin) {
-        // Si es temporal, mostrar el modal con el PIN y luego continuar
-        const newPin = Math.random().toString(36).substr(2, 7).toUpperCase();
-        setTemporaryPin(newPin);
-        setModalType('pin');
-      } else {
-        // Si es PIN del usuario, ir directamente al paso 2
+      if (verifyResponse.valid) {
+        // Credenciales válidas, pasar al paso 2
         setStep(2);
+      } else {
+        // Credenciales inválidas
+        setError({
+          message: verifyResponse.message || 'Credenciales incorrectas',
+          type: 'credentials-error'
+        });
       }
       
-    } catch (error) {
+    } catch (error: any) {
       setError({
-        message: 'Credenciales incorrectas. Verifique sus datos.',
+        message: error.message || 'Error al verificar las credenciales',
         type: 'credentials-error'
       });
     } finally {
@@ -151,15 +153,27 @@ const CambioContrasena: React.FC = () => {
     setError(null);
   
     try {
-      // TODO: Aquí irá la actualización de la contraseña con la API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Cambiar la contraseña con el servicio
+      const changeResponse = await ChangePasswordService.changePassword({
+        nombre: formDataStep1.nombre,
+        cedula: formDataStep1.cedula,
+        nuevaContrasena: formDataStep2.nuevaContrasena,
+        confirmarContrasena: formDataStep2.repetirContrasena,
+        pin: formDataStep1.pin
+      });
       
-      // Mostrar modal de éxito
-      setModalType('success');
+      // Si se generó un nuevo PIN (porque se usó un PIN temporal)
+      if (changeResponse.newPin) {
+        setNewGeneratedPin(changeResponse.newPin);
+        setModalType('pin');
+      } else {
+        // Si no hay nuevo PIN, mostrar directamente el modal de éxito
+        setModalType('success');
+      }
       
-    } catch (error) {
+    } catch (error: any) {
       setError({
-        message: 'Error al cambiar la contraseña. Intente nuevamente.',
+        message: error.message || 'Error al cambiar la contraseña',
         type: 'general-error'
       });
     } finally {
@@ -168,8 +182,7 @@ const CambioContrasena: React.FC = () => {
   };
 
   const handlePinModalAccept = () => {
-    setModalType(null);
-    setStep(2);
+    setModalType('success');
   };
 
   const handleSuccessModalAccept = () => {
@@ -184,9 +197,11 @@ const CambioContrasena: React.FC = () => {
       return (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2 className="modal-title">PIN</h2>
-            <p className="pin-display">{temporaryPin}</p>
-            <p className="modal-instruction">Guarde este PIN, será usado para el cambio de contraseña</p>
+            <h2 className="modal-title">Nuevo PIN Generado</h2>
+            <p className="pin-display">{newGeneratedPin}</p>
+            <p className="modal-instruction">
+              Guarde este PIN, será necesario para futuros inicios de sesión
+            </p>
             <button 
               className="modal-button"
               onClick={handlePinModalAccept}
