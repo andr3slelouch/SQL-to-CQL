@@ -50,10 +50,12 @@ const TranslatorPage: React.FC = () => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [databases, setDatabases] = useState<string[]>([]);
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Para controlar los keyspaces ya seleccionados (evitar enviar USE múltiples veces)
-  const [usedKeyspaces, setUsedKeyspaces] = useState<Set<string>>(new Set());
+  
+  // Rastrea el keyspace actual en lugar de usar un Set
+  const [currentKeyspace, setCurrentKeyspace] = useState<string>('');
 
   // Cargar las bases de datos (keyspaces) del backend sin bloquear la interfaz
   useEffect(() => {
@@ -76,7 +78,11 @@ const TranslatorPage: React.FC = () => {
         
         // Si hay keyspaces disponibles, seleccionar el primero por defecto
         if (keyspaces.length > 0) {
-          setSelectedDatabase(keyspaces[0]);
+          const defaultKeyspace = keyspaces[0];
+          setSelectedDatabase(defaultKeyspace);
+          setCurrentKeyspace(defaultKeyspace); // Establecer el keyspace actual
+          // Enviar USE para el keyspace inicial
+          await sendUseCommand(defaultKeyspace);
         }
       } catch (error) {
         console.error('Error al cargar las bases de datos:', error);
@@ -86,38 +92,48 @@ const TranslatorPage: React.FC = () => {
         setIsLoadingDatabases(false);
       }
     };
-    
+
     // Iniciamos la carga de manera no bloqueante
     fetchDatabases();
   }, []);
 
-  // Establecer datos de tablas de ejemplo
+  // Cargar tablas cuando cambia la base de datos seleccionada
   useEffect(() => {
-    const mockTables = [
-      'usuarios', 
-      'productos', 
-      'pedidos', 
-      'categorias', 
-      'inventario'
-    ];
-    
-    setTables(mockTables);
-  }, []);
+    const loadTables = async () => {
+      if (!selectedDatabase) {
+        setTables([]);
+        return;
+      }
+
+      setIsLoadingTables(true);
+      try {
+        const tables = await KeyspaceService.getKeyspaceTables(selectedDatabase);
+        setTables(tables);
+      } catch (error) {
+        console.error('Error al cargar tablas:', error);
+        setTables([]);
+        setError(`Error al cargar las tablas del keyspace ${selectedDatabase}`);
+      } finally {
+        setIsLoadingTables(false);
+      }
+    };
+
+    loadTables();
+  }, [selectedDatabase]);
 
   // Manejar cambio de base de datos seleccionada
   const handleDatabaseChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const keyspace = e.target.value;
     setSelectedDatabase(keyspace);
     
-    // Verificar si ya hemos enviado USE para este keyspace
-    if (!usedKeyspaces.has(keyspace)) {
-      // Enviar el comando USE al backend
+    // Limpiar las tablas mientras se cargan las nuevas
+    setTables([]);
+    
+    // SIEMPRE enviar el comando USE cuando se selecciona un keyspace diferente
+    if (keyspace && keyspace !== currentKeyspace) {
       await sendUseCommand(keyspace);
-      
-      // Agregar este keyspace al conjunto de keyspaces ya utilizados
-      const updatedUsedKeyspaces = new Set(usedKeyspaces);
-      updatedUsedKeyspaces.add(keyspace);
-      setUsedKeyspaces(updatedUsedKeyspaces);
+      // Actualizar el keyspace actual
+      setCurrentKeyspace(keyspace);
     }
   };
 
@@ -131,6 +147,8 @@ const TranslatorPage: React.FC = () => {
     try {
       // Crear el comando USE
       const useCommand = `USE ${keyspace};`;
+      
+      console.log(`Enviando comando USE para keyspace: ${keyspace}`);
       
       // Enviar el comando al backend
       const response = await HttpService.post<ExecuteResponse>(
@@ -150,12 +168,11 @@ const TranslatorPage: React.FC = () => {
         }
         
         // Mostrar mensaje de éxito en la sección de resultados
-        // Usar el mensaje proporcionado por el backend si existe
         const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
         setResults([{ mensaje }]);
         setColumns(['mensaje']);
         
-        console.log(`Comando USE ejecutado para ${keyspace}`);
+        console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
       } else {
         const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
         setError(errorMsg);
@@ -261,7 +278,6 @@ const TranslatorPage: React.FC = () => {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(cqlQuery);
     setShowTooltip(true);
-    
     // Ocultar el tooltip después de 2 segundos
     setTimeout(() => {
       setShowTooltip(false);
@@ -282,7 +298,7 @@ const TranslatorPage: React.FC = () => {
           <span>Salir</span>
         </div>
       </div>
-      
+
       {/* Contenido principal */}
       <div className="main-content">
         {/* Barra superior con usuario */}
@@ -292,12 +308,13 @@ const TranslatorPage: React.FC = () => {
             <FaUserCircle className="user-icon" />
           </div>
         </div>
-        
+
         {/* Área de trabajo */}
         <div className="work-area">
           {/* Sección de consulta */}
           <div className="query-section">
             {error && <div className="error-message">{error}</div>}
+            
             <div className="database-selector">
               <div className="select-container">
                 {/* Indicador de carga para el selector de bases de datos */}
@@ -329,14 +346,23 @@ const TranslatorPage: React.FC = () => {
                   </select>
                 )}
               </div>
+              
               <div className="select-container">
                 <div className="readonly-select">
-                  <span className={tables.length === 0 ? "placeholder" : ""}>
-                    {tables.length > 0 ? tables.join(", ") : "Tablas"}
-                  </span>
+                  {isLoadingTables ? (
+                    <div className="loading-indicator">
+                      <FaSpinner className="spinner-icon" />
+                      <span>Cargando tablas...</span>
+                    </div>
+                  ) : (
+                    <span className={tables.length === 0 ? "placeholder" : ""}>
+                      {tables.length > 0 ? tables.join(", ") : "No hay tablas disponibles"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
+
             <div className="query-editors">
               <div className="editor-container">
                 <h3>SQL</h3>
@@ -344,12 +370,13 @@ const TranslatorPage: React.FC = () => {
                   className="query-editor"
                   value={sqlQuery}
                   onChange={(e) => setSqlQuery(e.target.value)}
-                  placeholder={isLoadingDatabases
-                    ? "Cargando bases de datos..."
+                  placeholder={isLoadingDatabases 
+                    ? "Cargando bases de datos..." 
                     : "Escribe tu consulta SQL aquí..."}
                   disabled={isLoadingDatabases || isExecuting}
                 />
               </div>
+              
               <div className="editor-container">
                 <h3>CQL</h3>
                 <div className="cql-container">
@@ -368,6 +395,7 @@ const TranslatorPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
             <div className="execute-button-container">
               <button
                 className="execute-button"
@@ -379,7 +407,7 @@ const TranslatorPage: React.FC = () => {
               </button>
             </div>
           </div>
-          
+
           {/* Sección de resultados */}
           <div className="results-section">
             <h3>Resultado</h3>
@@ -397,7 +425,9 @@ const TranslatorPage: React.FC = () => {
                     {results.map((row, rowIndex) => (
                       <tr key={rowIndex}>
                         {columns.map((column, colIndex) => (
-                          <td key={colIndex}>{row[column] !== undefined ? String(row[column]) : ''}</td>
+                          <td key={colIndex}>
+                            {row[column] !== undefined ? String(row[column]) : ''}
+                          </td>
                         ))}
                       </tr>
                     ))}

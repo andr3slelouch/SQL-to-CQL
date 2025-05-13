@@ -126,10 +126,14 @@ html, body, #root, .App {
 
 .database-selector {
   margin-bottom: 1.5rem;
+  display: flex;
+  gap: 1rem;
 }
 
 .select-container {
-  margin-bottom: 1rem;
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .database-select {
@@ -177,6 +181,7 @@ html, body, #root, .App {
 
 .readonly-select .placeholder {
   color: #999;
+  font-style: italic;
 }
 
 .query-editors {
@@ -321,13 +326,12 @@ tr:nth-child(even) {
 
 /* Mensajes de error */
 .error-message {
-  background-color: rgba(255, 59, 48, 0.15);
-  border-left: 4px solid #ff3b30;
-  color: #ff8080;
-  padding: 0.8rem 1rem;
-  margin-bottom: 1.2rem;
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 10px 15px;
   border-radius: 4px;
-  font-size: 1rem;
+  margin-bottom: 15px;
+  border: 1px solid #f5c6cb;
   animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -349,39 +353,36 @@ tr:nth-child(even) {
 .loading-indicator {
   display: flex;
   align-items: center;
-  color: white;
-  background-color: rgba(255, 255, 255, 0.1);
+  gap: 8px;
   padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 10px;
-  font-size: 0.9rem;
+  color: #666;
+  font-size: 14px;
 }
 
 .spinner-icon {
   animation: spin 1s linear infinite;
-  margin-right: 8px;
-  font-size: 1rem;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Mejora visual para el select durante la carga */
-.database-select:disabled {
-  background-color: rgba(255, 255, 255, 0.7);
-  cursor: wait;
-  opacity: 0.8;
+/* Estilos específicos para el indicador de carga en el campo de tablas */
+.readonly-select .loading-indicator {
+  background: none;
+  padding: 4px 8px;
+  color: #666;
+  margin: 0;
 }
 
-/* Estilo para la sección sin resultados */
-.no-results {
-  color: #ddd;
-  font-size: 1.2rem;
-  text-align: center;
-  padding: 2rem;
-  font-style: italic;
+.readonly-select .loading-indicator .spinner-icon {
+  margin-right: 6px;
+  font-size: 0.9rem;
 }
 
 /* Responsive design */
@@ -397,6 +398,12 @@ tr:nth-child(even) {
   }
   .logo {
     font-size: 2.5rem;
+  }
+  .database-selector {
+    flex-direction: column;
+  }
+  .select-container {
+    width: 100%;
   }
 }
 

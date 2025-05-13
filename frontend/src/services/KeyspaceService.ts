@@ -40,7 +40,6 @@ class KeyspaceService {
             // Obtener keyspaces de caché pero verificar que sea del usuario actual
             const currentUser = AuthService.getCurrentUser();
             const cachedUserCedula = localStorage.getItem('cachedUserCedula');
-            
             if (currentUser && cachedUserCedula === currentUser.cedula) {
               const cachedKeyspaces = localStorage.getItem('cachedKeyspaces');
               resolve(cachedKeyspaces ? JSON.parse(cachedKeyspaces) : []);
@@ -58,9 +57,11 @@ class KeyspaceService {
     }
 
     this.isLoadingKeyspaces = true;
+
     try {
       // Obtener el usuario actual del servicio de autenticación
       const user = AuthService.getCurrentUser();
+      
       if (!user || !user.cedula) {
         console.error('Usuario no autenticado o sin cédula');
         this.clearCache(); // Limpiar caché si no hay usuario
@@ -82,15 +83,15 @@ class KeyspaceService {
         `/admin/keyspaces/user?cedula=${user.cedula}`, 
         { service: 'permissions' }
       );
-      
+
       console.log('Keyspaces obtenidos:', response.keyspaces);
-      
+
       // Guardar los keyspaces en localStorage junto con la cédula del usuario
       if (response.keyspaces) {
         localStorage.setItem('cachedKeyspaces', JSON.stringify(response.keyspaces));
         localStorage.setItem('cachedUserCedula', user.cedula);
       }
-      
+
       // Extraer el array de keyspaces
       return response.keyspaces || [];
       
@@ -113,6 +114,53 @@ class KeyspaceService {
       return [];
     } finally {
       this.isLoadingKeyspaces = false;
+    }
+  }
+
+  /**
+   * Obtiene las tablas de un keyspace específico
+   * @param keyspace Nombre del keyspace
+   * @returns Lista de tablas del keyspace
+   */
+  async getKeyspaceTables(keyspace: string): Promise<string[]> {
+    try {
+      if (!keyspace) {
+        console.warn('No se proporcionó un keyspace');
+        return [];
+      }
+
+      console.log(`Obteniendo tablas para keyspace: ${keyspace}`);
+
+      // Usar el servicio de permisos con el proxy configurado
+      const response = await HttpService.get<{ tables: string[] }>(
+        `/admin/keyspaces/tables?keyspace=${encodeURIComponent(keyspace)}`,
+        { service: 'permissions' }
+      );
+
+      console.log(`Tablas obtenidas para ${keyspace}:`, response.tables);
+      
+      return response.tables || [];
+    } catch (error) {
+      console.error(`Error al obtener tablas del keyspace ${keyspace}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Invalida el caché de tablas en el backend (solo para administradores)
+   * @param keyspace Nombre del keyspace (opcional)
+   */
+  async invalidateTablesCache(keyspace?: string): Promise<void> {
+    try {
+      const endpoint = keyspace 
+        ? `/admin/keyspaces/cache/tables/${keyspace}` 
+        : '/admin/keyspaces/cache/tables';
+      
+      await HttpService.delete(endpoint, { service: 'permissions' });
+      console.log(`Caché invalidado para keyspace: ${keyspace || 'todos'}`);
+    } catch (error) {
+      console.error('Error al invalidar caché:', error);
+      throw error;
     }
   }
 }
