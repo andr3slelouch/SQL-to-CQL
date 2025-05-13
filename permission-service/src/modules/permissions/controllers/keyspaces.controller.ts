@@ -1,5 +1,5 @@
 // src/modules/permissions/controllers/keyspaces.controller.ts
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Param, Delete, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -34,5 +34,30 @@ export class KeyspacesController {
   @Post('update-single-keyspace')
   updateSingleKeyspace(@Body() keyspaceUpdateDto: KeyspaceUpdateDto): Promise<UserPermissionsResponse> {
     return this.keyspacesService.updateSingleKeyspace(keyspaceUpdateDto);
+  }
+
+  // Nuevo endpoint para obtener tablas de un keyspace
+  @Get('tables')
+  async getKeyspaceTables(@Query('keyspace') keyspace: string): Promise<{ tables: string[] }> {
+    if (!keyspace) {
+      throw new BadRequestException('El keyspace es requerido');
+    }
+    return this.keyspacesService.getKeyspaceTables(keyspace);
+  }
+
+  // Endpoint para invalidar todo el caché de tablas (sin parámetro)
+  @Delete('cache/tables')
+  @Roles(true) // Solo administradores
+  async invalidateAllTablesCache(): Promise<{ message: string }> {
+    this.keyspacesService.invalidateTablesCache();
+    return { message: 'Todo el caché de tablas ha sido invalidado' };
+  }
+
+  // Endpoint para invalidar el caché de un keyspace específico
+  @Delete('cache/tables/:keyspace')
+  @Roles(true) // Solo administradores
+  async invalidateKeyspaceTablesCache(@Param('keyspace') keyspace: string): Promise<{ message: string }> {
+    this.keyspacesService.invalidateTablesCache(keyspace);
+    return { message: `Caché invalidado para keyspace ${keyspace}` };
   }
 }

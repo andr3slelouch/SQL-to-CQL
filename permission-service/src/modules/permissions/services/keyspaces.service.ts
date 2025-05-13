@@ -1,4 +1,4 @@
-// src/modules/permissions/services/keyspaces.service.ts (Versión completa)
+// src/modules/permissions/services/keyspaces.service.ts
 import { Injectable, NotFoundException, InternalServerErrorException, Inject, Logger } from '@nestjs/common';
 import { Client } from 'cassandra-driver';
 import { CASSANDRA_CLIENT } from '../../../database/cassandra.provider';
@@ -7,8 +7,11 @@ import { GetKeyspacesDto } from '../dto/get-keyspaces.dto';
 import { UpdateUserKeyspacesDto } from '../dto/update-user-keyspaces.dto';
 import { KeyspaceUpdateDto } from '../dto/keyspace-update.dto';
 import { UserPermissionsResponse } from '../../../common/interfaces/permissions.interface';
-import { AVAILABLE_OPERATIONS, ADMIN_DEFAULT_OPERATIONS, 
-USER_DEFAULT_OPERATIONS } from '../../../common/constants/operations.constants';
+import { 
+  AVAILABLE_OPERATIONS, 
+  ADMIN_DEFAULT_OPERATIONS, 
+  USER_DEFAULT_OPERATIONS 
+} from '../../../common/constants/operations.constants';
 
 // Interfaz para la respuesta de obtener keyspaces
 export interface KeyspacesResponse {
@@ -19,6 +22,10 @@ export interface KeyspacesResponse {
 @Injectable()
 export class KeyspacesService {
   private readonly logger = new Logger(KeyspacesService.name);
+  
+  // Caché en memoria exclusivo para las tablas de keyspaces
+  private tablesCache: Map<string, { tables: string[], timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
   constructor(
     @Inject(CASSANDRA_CLIENT)
@@ -38,8 +45,7 @@ export class KeyspacesService {
       const query = "SELECT keyspace_name FROM system_schema.keyspaces";
       const result = await this.cassandraClient.execute(query);
       const allKeyspaces = result.rows.map(row => row.keyspace_name)
-        .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 
-        'system_traces'].includes(keyspace));
+        .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 'system_traces'].includes(keyspace));
 
       // Si no se proporciona cédula, solo devolvemos todos los keyspaces
       if (!getKeyspacesDto.cedula) {
@@ -66,7 +72,7 @@ export class KeyspacesService {
       // Obtener los keyspaces asignados al usuario desde la tabla permissions
       const userQuery = 'SELECT keyspaces FROM auth.permissions WHERE cedula = ?';
       const userResult = await this.cassandraClient.execute(userQuery, [cedula], { prepare: true });
-      
+
       if (userResult.rowLength === 0) {
         // El usuario no tiene permisos registrados
         return {
@@ -114,8 +120,7 @@ export class KeyspacesService {
         const keyspacesQuery = "SELECT keyspace_name FROM system_schema.keyspaces";
         const keyspacesResult = await this.cassandraClient.execute(keyspacesQuery);
         const allKeyspaces = keyspacesResult.rows.map(row => row.keyspace_name)
-          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 
-          'system_traces'].includes(keyspace));
+          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 'system_traces'].includes(keyspace));
 
         return {
           cedula: cedula,
@@ -166,9 +171,9 @@ export class KeyspacesService {
    * @param updateUserKeyspacesDto DTO con la cédula y la lista de keyspaces
    * @returns Respuesta con los keyspaces actualizados del usuario
    */
-  async updateUserKeyspaces(updateUserKeyspacesDto: UpdateUserKeyspacesDto): 
-  Promise<UserPermissionsResponse> {
+  async updateUserKeyspaces(updateUserKeyspacesDto: UpdateUserKeyspacesDto): Promise<UserPermissionsResponse> {
     const { cedula, keyspaces } = updateUserKeyspacesDto;
+
     try {
       // Verificar que el usuario existe
       const user = await this.userFinderUtil.findByCedula(cedula);
@@ -180,26 +185,23 @@ export class KeyspacesService {
       const validKeyspacesQuery = "SELECT keyspace_name FROM system_schema.keyspaces";
       const validKeyspacesResult = await this.cassandraClient.execute(validKeyspacesQuery);
       const validKeyspaces = validKeyspacesResult.rows.map(row => row.keyspace_name);
-      const invalidKeyspaces = keyspaces.filter(keyspace =>
-        !validKeyspaces.includes(keyspace));
+
+      const invalidKeyspaces = keyspaces.filter(keyspace => !validKeyspaces.includes(keyspace));
       if (invalidKeyspaces.length > 0) {
-        throw new NotFoundException(`Los siguientes keyspaces no existen: 
-        ${invalidKeyspaces.join(', ')}`);
+        throw new NotFoundException(`Los siguientes keyspaces no existen: ${invalidKeyspaces.join(', ')}`);
       }
 
       // Si el usuario es administrador, permitimos la actualización pero registramos el evento
       if (user.rol === true) {
         this.logger.log(`Actualizando keyspaces de un administrador: ${cedula}`);
-        
         // Obtenemos todos los keyspaces disponibles
         const allKeyspaces = validKeyspacesResult.rows.map(row => row.keyspace_name)
-          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 
-          'system_traces'].includes(keyspace));
-        
+          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 'system_traces'].includes(keyspace));
+
         // Actualizamos la lista de keyspaces en la tabla de permisos
         const updateQuery = 'UPDATE auth.permissions SET keyspaces = ? WHERE cedula = ?';
         await this.cassandraClient.execute(updateQuery, [allKeyspaces, cedula], { prepare: true });
-        
+
         return {
           cedula,
           nombre: user.nombre,
@@ -209,12 +211,12 @@ export class KeyspacesService {
           keyspaces: allKeyspaces
         };
       }
-      
+
       // Obtener los permisos actuales del usuario (para usuarios no administradores)
       const query = 'SELECT cedula, keyspaces, operaciones FROM auth.permissions WHERE cedula = ?';
       const result = await this.cassandraClient.execute(query, [cedula], { prepare: true });
+
       let operaciones = [];
-      
       if (result.rowLength === 0) {
         // Si el usuario no tiene permisos, creamos un nuevo registro
         const insertQuery = 'INSERT INTO auth.permissions (cedula, keyspaces, operaciones) VALUES (?, ?, ?)';
@@ -223,12 +225,13 @@ export class KeyspacesService {
         // Si el usuario ya tiene permisos, actualizamos los keyspaces
         const permissions = result.first();
         operaciones = permissions.operaciones || [];
+
         const updateQuery = 'UPDATE auth.permissions SET keyspaces = ? WHERE cedula = ?';
         await this.cassandraClient.execute(updateQuery, [keyspaces, cedula], { prepare: true });
       }
-      
+
       this.logger.log(`Keyspaces actualizados para el usuario con cédula: ${cedula}`);
-      
+
       // Devolver los keyspaces actualizados
       return {
         cedula,
@@ -252,9 +255,9 @@ export class KeyspacesService {
    * @param keyspaceUpdateDto DTO con la cédula, keyspace y acción
    * @returns Respuesta con los keyspaces actualizados del usuario
    */
-  async updateSingleKeyspace(keyspaceUpdateDto: KeyspaceUpdateDto): 
-  Promise<UserPermissionsResponse> {
+  async updateSingleKeyspace(keyspaceUpdateDto: KeyspaceUpdateDto): Promise<UserPermissionsResponse> {
     const { cedula, keyspace, action } = keyspaceUpdateDto;
+
     try {
       // Verificar que el usuario existe
       const user = await this.userFinderUtil.findByCedula(cedula);
@@ -265,14 +268,12 @@ export class KeyspacesService {
       // Si el usuario es administrador, permitimos la actualización pero registramos el evento
       if (user.rol === true) {
         this.logger.log(`Actualizando keyspace para un administrador: ${cedula}`);
-        
         // Obtener todos los keyspaces disponibles
         const keyspacesQuery = "SELECT keyspace_name FROM system_schema.keyspaces";
         const keyspacesResult = await this.cassandraClient.execute(keyspacesQuery);
         const allKeyspaces = keyspacesResult.rows.map(row => row.keyspace_name)
-          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 
-          'system_traces'].includes(keyspace));
-        
+          .filter(keyspace => !['system', 'system_auth', 'system_distributed', 'system_schema', 'system_traces'].includes(keyspace));
+
         // Asegurarse de que el keyspace solicitado esté en la lista si es 'add'
         let updatedKeyspaces = [...allKeyspaces];
         if (action === 'add' && !updatedKeyspaces.includes(keyspace)) {
@@ -280,11 +281,11 @@ export class KeyspacesService {
         } else if (action === 'remove') {
           updatedKeyspaces = updatedKeyspaces.filter(k => k !== keyspace);
         }
-        
+
         // Actualizar la base de datos
         const updateQuery = 'UPDATE auth.permissions SET keyspaces = ? WHERE cedula = ?';
         await this.cassandraClient.execute(updateQuery, [updatedKeyspaces, cedula], { prepare: true });
-        
+
         return {
           cedula,
           nombre: user.nombre,
@@ -314,9 +315,10 @@ export class KeyspacesService {
       // Obtener los permisos actuales del usuario
       const query = 'SELECT cedula, keyspaces, operaciones FROM auth.permissions WHERE cedula = ?';
       const result = await this.cassandraClient.execute(query, [cedula], { prepare: true });
+
       let userKeyspaces: string[] = [];
       let operaciones: string[] = [];
-      
+
       if (result.rowLength === 0) {
         // Si el usuario no tiene permisos, creamos un nuevo registro
         if (action === 'add') {
@@ -329,7 +331,7 @@ export class KeyspacesService {
         const permissions = result.first();
         operaciones = permissions.operaciones || [];
         userKeyspaces = permissions.keyspaces || [];
-        
+
         // Actualizar la lista de keyspaces según la acción
         if (action === 'add') {
           // Verificar si ya existe el keyspace
@@ -340,13 +342,13 @@ export class KeyspacesService {
           // Eliminar el keyspace si existe
           userKeyspaces = userKeyspaces.filter(k => k !== keyspace);
         }
-        
+
         const updateQuery = 'UPDATE auth.permissions SET keyspaces = ? WHERE cedula = ?';
         await this.cassandraClient.execute(updateQuery, [userKeyspaces, cedula], { prepare: true });
       }
-      
+
       this.logger.log(`Keyspace ${action === 'add' ? 'añadido a' : 'eliminado de'} usuario con cédula: ${cedula}, keyspace: ${keyspace}`);
-      
+
       // Devolver los keyspaces actualizados
       return {
         cedula,
@@ -362,6 +364,67 @@ export class KeyspacesService {
       }
       this.logger.error(`Error al actualizar keyspace individual del usuario: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al actualizar keyspace del usuario');
+    }
+  }
+
+  /**
+   * Obtiene las tablas de un keyspace específico con caché
+   * @param keyspace Nombre del keyspace
+   * @returns Lista de tablas del keyspace
+   */
+  async getKeyspaceTables(keyspace: string): Promise<{ tables: string[] }> {
+    try {
+      // Verificar caché
+      const cached = this.tablesCache.get(keyspace);
+      if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
+        this.logger.log(`Retornando tablas desde caché para keyspace ${keyspace}`);
+        return { tables: cached.tables };
+      }
+
+      // Verificar que el keyspace existe
+      const keyspaceQuery = 'SELECT keyspace_name FROM system_schema.keyspaces WHERE keyspace_name = ?';
+      const keyspaceResult = await this.cassandraClient.execute(keyspaceQuery, [keyspace], { prepare: true });
+      
+      if (keyspaceResult.rowLength === 0) {
+        throw new NotFoundException(`El keyspace ${keyspace} no existe`);
+      }
+
+      // Obtener todas las tablas del keyspace
+      const query = 'SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?';
+      const result = await this.cassandraClient.execute(query, [keyspace], { prepare: true });
+      
+      const tables = result.rows.map(row => row.table_name).sort();
+      
+      // Guardar en caché
+      this.tablesCache.set(keyspace, {
+        tables,
+        timestamp: Date.now()
+      });
+      
+      this.logger.log(`Tablas obtenidas para keyspace ${keyspace}: ${tables.length} (guardadas en caché)`);
+      
+      return { tables };
+      
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Error al obtener tablas del keyspace ${keyspace}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Error al obtener tablas del keyspace ${keyspace}`);
+    }
+  }
+
+  /**
+   * Invalida el caché de tablas para un keyspace específico o todos
+   * @param keyspace - Nombre del keyspace a invalidar (opcional)
+   */
+  invalidateTablesCache(keyspace?: string): void {
+    if (keyspace) {
+      this.tablesCache.delete(keyspace);
+      this.logger.log(`Caché invalidado para keyspace ${keyspace}`);
+    } else {
+      this.tablesCache.clear();
+      this.logger.log('Todo el caché de tablas ha sido invalidado');
     }
   }
 }
