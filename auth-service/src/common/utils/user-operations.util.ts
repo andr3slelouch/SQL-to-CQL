@@ -12,7 +12,6 @@ export const StandardOperations = [
     'DELETE',
     
     // Operaciones de Referencia/Metadatos
-    'DESCRIBE KEYSPACES',
     'DESCRIBE TABLES',
     'DESCRIBE TABLE'
   ];

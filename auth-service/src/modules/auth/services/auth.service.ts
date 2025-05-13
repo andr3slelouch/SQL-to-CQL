@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private failedAttempts: Map<string, FailedLoginAttempt> = new Map();
-  private readonly JWT_EXPIRATION = 900; // 15 minutos en segundos
+  private readonly JWT_EXPIRATION = 3600; // 1hora en segundos
 
   constructor(
     private userFinderUtil: UserFinderUtil,

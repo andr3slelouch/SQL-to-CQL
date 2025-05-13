@@ -176,6 +176,37 @@ export class ChangePasswordService {
   }
 
   /**
+   * Busca un usuario por cédula y devuelve información básica
+   * @param cedula Cédula del usuario a buscar
+   * @returns Información básica del usuario
+   */
+  async findUserByCedula(cedula: string): Promise<{ 
+  nombre: string, 
+  cedula: string, 
+  rol: string 
+}> {
+  try {
+    const user = await this.userFinderUtil.findByCedula(cedula);
+    
+    if (!user) {
+      throw new NotFoundException(`No se encontró un usuario con la cédula: ${cedula}`);
+    }
+    
+    return {
+      nombre: user.nombre,
+      cedula: cedula, // Devolver la cédula sin cifrar que recibimos como parámetro
+      rol: user.rol === true ? 'Administrador' : 'Usuario Común'
+    };
+  } catch (error) {
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    this.logger.error(`Error al buscar usuario por cédula: ${error.message}`, error.stack);
+    throw new InternalServerErrorException('Error al buscar usuario');
+  }
+}
+
+  /**
    * Genera un PIN aleatorio de 6 caracteres alfanuméricos
    */
   private generateRandomPin(): string {
