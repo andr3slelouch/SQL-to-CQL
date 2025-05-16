@@ -276,7 +276,7 @@ export class TableTranslator implements Translator {
     // Procesar las definiciones de columnas y restricciones
     const columnDefs: string[] = [];
     let primaryKeyDef: string | null = null;
-    let primaryKeyColumn: string | null = null;
+    const primaryKeyColumns: string[] = [];
     
     if (!ast.create_definitions || !Array.isArray(ast.create_definitions)) {
       return this.createErrorComment(`No se encontraron definiciones de columna para la tabla ${tableName}`);
@@ -314,42 +314,39 @@ export class TableTranslator implements Translator {
         // Construir definición de columna
         let columnDef = `${columnName} ${cqlDataType}`;
         
-        // Cassandra no tiene un concepto NOT NULL, todas las columnas pueden ser null
-        // excepto las que forman parte de la clave primaria
+        // NUEVO: Verificar si esta columna tiene PRIMARY KEY en la definición
+        if (def.primary_key || 
+            (def.definition.constraint && def.definition.constraint.some((c: any) => c.type === 'primary key'))) {
+          primaryKeyColumns.push(columnName);
+          this.logger.debug(`Columna ${columnName} detectada como clave primaria en la definición`);
+        }
         
-        // Verificar si esta columna es una clave primaria
+        // Verificar si esta columna es una clave primaria (método anterior)
         if (def.definition.primary_key) {
-          primaryKeyColumn = columnName;
+          if (!primaryKeyColumns.includes(columnName)) {
+            primaryKeyColumns.push(columnName);
+          }
         }
         
         columnDefs.push(columnDef);
       } else if (def.resource === 'constraint' && def.constraint_type === 'primary key') {
         // Restricción PRIMARY KEY
-        const primaryKeyColumns: string[] = [];
-        
         if (def.definition && Array.isArray(def.definition)) {
           for (const col of def.definition) {
             if (col.column) {
-              primaryKeyColumns.push(col.column);
+              if (!primaryKeyColumns.includes(col.column)) {
+                primaryKeyColumns.push(col.column);
+              }
             }
           }
-        }
-        
-        if (primaryKeyColumns.length > 0) {
-          primaryKeyDef = `PRIMARY KEY (${primaryKeyColumns.join(', ')})`;
         }
       }
     }
     
-    // Si hay una columna marcada como clave primaria pero no hay definición de PRIMARY KEY
-    if (!primaryKeyDef && primaryKeyColumn) {
-      primaryKeyDef = `PRIMARY KEY (${primaryKeyColumn})`;
-      this.logger.debug(`Utilizando columna ${primaryKeyColumn} como clave primaria`);
-    }
-    
-    // Añadir PRIMARY KEY a las definiciones de columnas
-    if (primaryKeyDef) {
-      columnDefs.push(primaryKeyDef);
+    // Si hay columnas marcadas como clave primaria
+    if (primaryKeyColumns.length > 0) {
+      primaryKeyDef = `PRIMARY KEY (${primaryKeyColumns.join(', ')})`;
+      this.logger.debug(`Utilizando columnas como clave primaria: ${primaryKeyColumns.join(', ')}`);
     } else {
       // Cassandra requiere una clave primaria
       this.logger.warn(`No se encontró clave primaria para la tabla ${tableName}. Cassandra requiere una clave primaria.`);
@@ -370,6 +367,11 @@ export class TableTranslator implements Translator {
       } else {
         return this.createErrorComment(`No se pudieron extraer definiciones de columna para la tabla ${tableName}`);
       }
+    }
+    
+    // Añadir PRIMARY KEY a las definiciones de columnas si existe
+    if (primaryKeyDef) {
+      columnDefs.push(primaryKeyDef);
     }
     
     // Construir la sentencia CREATE TABLE
