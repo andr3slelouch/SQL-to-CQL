@@ -224,6 +224,38 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+/* Modal para error de cédula duplicada */
+.duplicate-modal .modal-content {
+  border-left: 5px solid #ff3b30;
+}
+
+.duplicate-modal .modal-title {
+  color: #ff3b30;
+}
+
+.duplicate-modal .modal-message {
+  font-weight: bold;
+}
+
+.duplicate-modal .cedula-display {
+  font-size: 1.5rem;
+  background-color: rgba(255, 59, 48, 0.15);
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  color: white;
+  font-weight: bold;
+}
+
+.duplicate-modal .modal-button {
+  background-color: #ff3b30;
+  color: white;
+}
+
+.duplicate-modal .modal-button:hover {
+  background-color: #d63030;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { 

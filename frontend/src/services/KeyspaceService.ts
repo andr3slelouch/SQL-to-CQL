@@ -1,4 +1,3 @@
-// src/services/KeyspaceService.ts
 import HttpService from './HttpService';
 import AuthService from './AuthService';
 
@@ -14,6 +13,15 @@ export interface UserPermissionsResponse {
 class KeyspaceService {
   // Flag para evitar múltiples peticiones simultáneas
   private isLoadingKeyspaces: boolean = false;
+
+  /**
+   * Normaliza el nombre del keyspace a minúsculas
+   * @param keyspace Nombre del keyspace
+   * @returns Nombre normalizado (en minúsculas)
+   */
+  private normalizeKeyspaceName(keyspace: string): string {
+    return keyspace ? keyspace.toLowerCase() : '';
+  }
 
   /**
    * Limpia la caché de keyspaces
@@ -129,15 +137,18 @@ class KeyspaceService {
         return [];
       }
 
-      console.log(`Obteniendo tablas para keyspace: ${keyspace}`);
+      // Normalizar el keyspace a minúsculas para garantizar compatibilidad
+      const normalizedKeyspace = this.normalizeKeyspaceName(keyspace);
+      
+      console.log(`Obteniendo tablas para keyspace: ${normalizedKeyspace}`);
 
       // Usar el servicio de permisos con el proxy configurado
       const response = await HttpService.get<{ tables: string[] }>(
-        `/admin/keyspaces/tables?keyspace=${encodeURIComponent(keyspace)}`,
+        `/admin/keyspaces/tables?keyspace=${encodeURIComponent(normalizedKeyspace)}`,
         { service: 'permissions' }
       );
 
-      console.log(`Tablas obtenidas para ${keyspace}:`, response.tables);
+      console.log(`Tablas obtenidas para ${normalizedKeyspace}:`, response.tables);
       
       return response.tables || [];
     } catch (error) {
@@ -152,12 +163,15 @@ class KeyspaceService {
    */
   async invalidateTablesCache(keyspace?: string): Promise<void> {
     try {
-      const endpoint = keyspace 
-        ? `/admin/keyspaces/cache/tables/${keyspace}` 
+      // Si se proporciona un keyspace, normalizarlo
+      const normalizedKeyspace = keyspace ? this.normalizeKeyspaceName(keyspace) : undefined;
+      
+      const endpoint = normalizedKeyspace 
+        ? `/admin/keyspaces/cache/tables/${normalizedKeyspace}` 
         : '/admin/keyspaces/cache/tables';
       
       await HttpService.delete(endpoint, { service: 'permissions' });
-      console.log(`Caché invalidado para keyspace: ${keyspace || 'todos'}`);
+      console.log(`Caché invalidado para keyspace: ${normalizedKeyspace || 'todos'}`);
     } catch (error) {
       console.error('Error al invalidar caché:', error);
       throw error;

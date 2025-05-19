@@ -14,6 +14,15 @@ export interface TranslationResponse {
 
 class TranslatorService {
   /**
+   * Normaliza el nombre del keyspace a minúsculas
+   * @param keyspace Nombre del keyspace
+   * @returns Nombre normalizado (en minúsculas)
+   */
+  private normalizeKeyspaceName(keyspace: string): string {
+    return keyspace ? keyspace.toLowerCase() : '';
+  }
+
+  /**
    * Traduce una consulta SQL a CQL
    * @param sql Consulta SQL a traducir
    * @param keyspace Keyspace seleccionado
@@ -25,9 +34,12 @@ class TranslatorService {
         throw new Error('Se requiere una consulta SQL y un keyspace seleccionado');
       }
 
+      // Normalizar el keyspace a minúsculas
+      const normalizedKeyspace = this.normalizeKeyspaceName(keyspace);
+
       const request: TranslationRequest = {
         sql,
-        keyspace
+        keyspace: normalizedKeyspace
       };
 
       const response = await HttpService.post<TranslationResponse>('/translator/translate', request);
@@ -53,9 +65,12 @@ class TranslatorService {
         throw new Error('Se requiere una consulta CQL y un keyspace seleccionado');
       }
 
+      // Normalizar el keyspace a minúsculas
+      const normalizedKeyspace = this.normalizeKeyspaceName(keyspace);
+
       const response = await HttpService.post<{results: any[]}>('/translator/execute', {
         cql,
-        keyspace
+        keyspace: normalizedKeyspace
       });
       
       return response.results || [];

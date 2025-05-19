@@ -6,29 +6,85 @@ import '../styles/Registro.css';
 
 // Interfaces para tipado
 interface RegistroFormData {
-  nombre: string;
   cedula: string;
-  contrasena: string;
-  repetirContrasena: string;
+  name: string;
+  password: string;
+  confirmPassword: string;
 }
 
 interface ErrorState {
   message: string;
-  type: 'validation-error' | 'server-error' | 'general-error';
+  type: 'validation-error' | 'server-error';
 }
+
+interface DuplicateModalProps {
+  onClose: () => void;
+}
+
+// Componente Modal para cédula duplicada
+const DuplicateModal: React.FC<DuplicateModalProps> = ({ onClose }) => {
+  return (
+    <div className="modal-overlay duplicate-modal">
+      <div className="modal-content">
+        <h2 className="modal-title">Error</h2>
+        <p className="modal-message">
+          No se puede crear el usuario con la información ingresada
+        </p>
+        <div className="modal-instruction">
+          La cédula/código ingresado ya existe en el sistema. Por favor, utilice otra cédula o contacte al administrador.
+        </div>
+        <button className="modal-button" onClick={onClose}>
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Componente Modal para PIN generado
+const PinModal: React.FC<{ nombre: string; pin: string; onClose: () => void }> = ({ 
+  nombre, 
+  pin, 
+  onClose 
+}) => {
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <h2 className="modal-title">Registro Exitoso</h2>
+        <p className="modal-message">
+          ¡Bienvenido, {nombre}!
+        </p>
+        <p className="modal-message">
+          Su PIN de acceso es:
+        </p>
+        <div className="pin-display">{pin}</div>
+        <p className="modal-instruction">
+          Guarde este PIN en un lugar seguro. Lo necesitará para recuperar su cuenta.
+        </p>
+        <button className="modal-button" onClick={onClose}>
+          Ir a Iniciar Sesión
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Registro: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<RegistroFormData>({
-    nombre: '',
     cedula: '',
-    contrasena: '',
-    repetirContrasena: ''
+    name: '',
+    password: '',
+    confirmPassword: ''
   });
   const [error, setError] = useState<ErrorState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
-  const [pin, setPin] = useState<string>('');
+  const [showPinModal, setShowPinModal] = useState<boolean>(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState<boolean>(false);
+  const [registroExitoso, setRegistroExitoso] = useState<{
+    nombre: string;
+    pin: string;
+  } | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -44,15 +100,8 @@ const Registro: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    if (!formData.nombre || !formData.cedula || !formData.contrasena || !formData.repetirContrasena) {
-      setError({
-        message: 'Todos los campos son obligatorios',
-        type: 'validation-error'
-      });
-      return false;
-    }
-
-    if (formData.contrasena !== formData.repetirContrasena) {
+    // Validar que las contraseñas coincidan
+    if (formData.password !== formData.confirmPassword) {
       setError({
         message: 'Las contraseñas no coinciden',
         type: 'validation-error'
@@ -60,9 +109,27 @@ const Registro: React.FC = () => {
       return false;
     }
 
-    if (formData.contrasena.length < 6) {
+    // Validar longitud mínima de contraseña (6 caracteres según el DTO)
+    if (formData.password.length < 6) {
       setError({
         message: 'La contraseña debe tener al menos 6 caracteres',
+        type: 'validation-error'
+      });
+      return false;
+    }
+
+    // Validar que los campos no estén vacíos
+    if (!formData.cedula.trim()) {
+      setError({
+        message: 'La cédula es requerida',
+        type: 'validation-error'
+      });
+      return false;
+    }
+
+    if (!formData.name.trim()) {
+      setError({
+        message: 'El nombre es requerido',
         type: 'validation-error'
       });
       return false;
@@ -74,39 +141,51 @@ const Registro: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validar el formulario antes de enviar
     if (!validateForm()) {
       return;
     }
-
+    
     setIsLoading(true);
     setError(null);
   
     try {
-      // Llamada real al API usando UserService
-      const response = await RegistroService.createUser({
+      // Preparar los datos para enviar al servicio
+      const userData = {
         cedula: formData.cedula,
-        name: formData.nombre,
-        password: formData.contrasena
+        name: formData.name,
+        password: formData.password
+      };
+      
+      // Llamar al servicio para crear el usuario
+      const response = await RegistroService.createUser(userData);
+      
+      // Registro exitoso
+      setRegistroExitoso({
+        nombre: response.nombre,
+        pin: response.pin
       });
       
-      // Establecer el PIN recibido del servidor
-      setPin(response.pin);
-      setShowSuccessModal(true);
+      // Mostrar modal con el PIN
+      setShowPinModal(true);
+      
+      // Limpiar el formulario
+      setFormData({
+        cedula: '',
+        name: '',
+        password: '',
+        confirmPassword: ''
+      });
       
     } catch (error) {
       if (error instanceof Error) {
-        // Manejar errores específicos del servidor
-        if (error.message.includes('cédula ya existe')) {
-          setError({
-            message: 'Ya existe un usuario con esta cédula',
-            type: 'server-error'
-          });
-        } else if (error.message.includes('Error de conexión')) {
-          setError({
-            message: 'Error de conexión con el servidor. Por favor, intente más tarde.',
-            type: 'server-error'
-          });
+        // Verificar si es un error de cédula duplicada
+        if (error.message.includes('Ya existe un usuario') || 
+            error.message.includes('No se puede crear el usuario')) {
+          // Mostrar modal de cédula duplicada
+          setShowDuplicateModal(true);
         } else {
+          // Otro tipo de error
           setError({
             message: error.message,
             type: 'server-error'
@@ -115,7 +194,7 @@ const Registro: React.FC = () => {
       } else {
         setError({
           message: 'Ocurrió un error inesperado durante el registro.',
-          type: 'general-error'
+          type: 'server-error'
         });
       }
     } finally {
@@ -123,32 +202,26 @@ const Registro: React.FC = () => {
     }
   };
 
-  const handleAcceptPin = () => {
-    setShowSuccessModal(false);
-    navigate('/');
+  // Función para ir a la página de login después de cerrar el modal de PIN
+  const goToLogin = () => {
+    navigate('/login');
+  };
+
+  // Función para cerrar el modal de PIN
+  const handlePinModalClose = () => {
+    setShowPinModal(false);
+    goToLogin();
+  };
+
+  // Función para cerrar el modal de cédula duplicada
+  const handleDuplicateModalClose = () => {
+    setShowDuplicateModal(false);
   };
 
   return (
     <div className="registro-container">
-      {showSuccessModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 className="modal-title">PIN</h2>
-            <p className="pin-display">{pin}</p>
-            <p className="modal-message">Registro Exitoso</p>
-            <p className="modal-instruction">Guarde este PIN, será usado para el cambio de contraseña</p>
-            <button 
-              className="modal-button"
-              onClick={handleAcceptPin}
-            >
-              Aceptar
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="registro-card">
-        <h2 className="registro-title">Registro</h2>
+        <h1 className="registro-title">Registro de Usuario</h1>
         
         {error && (
           <div className={`error-message ${error.type}`}>
@@ -157,19 +230,6 @@ const Registro: React.FC = () => {
         )}
         
         <form className="registro-form" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="nombre">Nombre de Usuario</label>
-            <input
-              type="text"
-              id="nombre"
-              className="form-control"
-              value={formData.nombre}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          
           <div className="form-group">
             <label htmlFor="cedula">Cédula/Código</label>
             <input
@@ -182,47 +242,72 @@ const Registro: React.FC = () => {
               disabled={isLoading}
             />
           </div>
-          
           <div className="form-group">
-            <label htmlFor="contrasena">Contraseña</label>
+            <label htmlFor="name">Nombre Completo</label>
             <input
-              type="password"
-              id="contrasena"
+              type="text"
+              id="name"
               className="form-control"
-              value={formData.contrasena}
+              value={formData.name}
               onChange={handleChange}
               required
               disabled={isLoading}
             />
           </div>
-          
           <div className="form-group">
-            <label htmlFor="repetirContrasena">Repita la Contraseña</label>
+            <label htmlFor="password">Contraseña</label>
             <input
               type="password"
-              id="repetirContrasena"
+              id="password"
               className="form-control"
-              value={formData.repetirContrasena}
+              value={formData.password}
+              onChange={handleChange}
+              required
+              minLength={6}
+              disabled={isLoading}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirmar Contraseña</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              className="form-control"
+              value={formData.confirmPassword}
               onChange={handleChange}
               required
               disabled={isLoading}
             />
           </div>
-          
           <button 
             type="submit" 
             className="registro-button"
             disabled={isLoading}
           >
-            {isLoading ? 'Registrando...' : 'Registrarse'}
+            {isLoading ? 'Procesando...' : 'Registrarse'}
           </button>
         </form>
         
         <div className="login-link-container">
-          <span>¿Ya tienes una cuenta? </span>
-          <Link to="/" className="login-link">Inicia sesión</Link>
+          ¿Ya tiene una cuenta? <Link to="/login" className="login-link">Iniciar Sesión</Link>
         </div>
       </div>
+      
+      {/* Modal para PIN generado */}
+      {showPinModal && registroExitoso && (
+        <PinModal
+          nombre={registroExitoso.nombre}
+          pin={registroExitoso.pin}
+          onClose={handlePinModalClose}
+        />
+      )}
+      
+      {/* Modal para cédula duplicada */}
+      {showDuplicateModal && (
+        <DuplicateModal
+          onClose={handleDuplicateModalClose}
+        />
+      )}
     </div>
   );
 };

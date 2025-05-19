@@ -76,6 +76,13 @@ class HttpService {
           throw new Error('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
         }
         
+        // Manejar el conflicto de cédula duplicada específicamente
+        if (response.status === 409) {
+          console.error('Error 409: Conflicto - Recurso duplicado');
+          const errorData = await response.json().catch(() => null);
+          throw new Error('No se puede crear el usuario con la información ingresada');
+        }
+        
         // Intentar obtener detalles del error desde la respuesta
         const errorData = await response.json().catch(() => null);
         console.error('Error en la respuesta:', errorData);

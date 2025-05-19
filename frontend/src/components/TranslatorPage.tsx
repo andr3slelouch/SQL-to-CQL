@@ -139,56 +139,59 @@ const TranslatorPage: React.FC = () => {
 
   // Función para enviar comando USE al backend
   const sendUseCommand = async (keyspace: string) => {
-    if (!keyspace) return;
+  if (!keyspace) return;
+  
+  setIsExecuting(true);
+  setError(null);
+  
+  try {
+    // Normalizar el keyspace a minúsculas
+    const normalizedKeyspace = keyspace.toLowerCase();
     
-    setIsExecuting(true);
-    setError(null);
+    // Crear el comando USE
+    const useCommand = `USE ${normalizedKeyspace};`;
     
-    try {
-      // Crear el comando USE
-      const useCommand = `USE ${keyspace};`;
-      
-      console.log(`Enviando comando USE para keyspace: ${keyspace}`);
-      
-      // Enviar el comando al backend
-      const response = await HttpService.post<ExecuteResponse>(
-        '/translator/execute',
-        { sql: useCommand },
-        { service: 'translator' }
-      );
-      
-      if (response && response.success) {
-        // Priorizar el campo copyableCqlQuery.query para mostrar en el campo CQL
-        if (response.copyableCqlQuery && response.copyableCqlQuery.query) {
-          setCqlQuery(response.copyableCqlQuery.query);
-        } else if (response.cql) {
-          setCqlQuery(response.cql);
-        } else if (response.translatedQuery) {
-          setCqlQuery(response.translatedQuery);
-        }
-        
-        // Mostrar mensaje de éxito en la sección de resultados
-        const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
-        setResults([{ mensaje }]);
-        setColumns(['mensaje']);
-        
-        console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
-      } else {
-        const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
-        setError(errorMsg);
-        setResults([{ mensaje: errorMsg }]);
-        setColumns(['mensaje']);
+    console.log(`Enviando comando USE para keyspace: ${normalizedKeyspace}`);
+    
+    // Enviar el comando al backend
+    const response = await HttpService.post<ExecuteResponse>(
+      '/translator/execute',
+      { sql: useCommand },
+      { service: 'translator' }
+    );
+    
+    if (response && response.success) {
+      // Priorizar el campo copyableCqlQuery.query para mostrar en el campo CQL
+      if (response.copyableCqlQuery && response.copyableCqlQuery.query) {
+        setCqlQuery(response.copyableCqlQuery.query);
+      } else if (response.cql) {
+        setCqlQuery(response.cql);
+      } else if (response.translatedQuery) {
+        setCqlQuery(response.translatedQuery);
       }
-    } catch (error: any) {
-      console.error('Error al ejecutar USE:', error);
-      const errorMsg = `Error al seleccionar la base de datos ${keyspace}: ${error.message}`;
+      
+      // Mostrar mensaje de éxito en la sección de resultados
+      const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
+      setResults([{ mensaje }]);
+      setColumns(['mensaje']);
+      
+      console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
+    } else {
+      const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
       setError(errorMsg);
       setResults([{ mensaje: errorMsg }]);
       setColumns(['mensaje']);
-    } finally {
-      setIsExecuting(false);
     }
-  };
+  } catch (error: any) {
+    console.error('Error al ejecutar USE:', error);
+    const errorMsg = `Error al seleccionar la base de datos ${keyspace}: ${error.message}`;
+    setError(errorMsg);
+    setResults([{ mensaje: errorMsg }]);
+    setColumns(['mensaje']);
+  } finally {
+    setIsExecuting(false);
+  }
+};
 
   // Función para ejecutar la consulta SQL (ahora también maneja la traducción)
   const handleExecute = async () => {

@@ -1,4 +1,4 @@
-// src/services/UserService.ts
+// src/services/RegistroService.ts
 import HttpService from './HttpService';
 
 // Interfaces para tipado basadas en el backend
@@ -13,7 +13,7 @@ interface UserCreateResponse {
   pin: string;
 }
 
-class UserService {
+class RegistroService {
   /**
    * Crea un nuevo usuario
    * @param userData Datos del usuario a crear
@@ -29,18 +29,13 @@ class UserService {
       
       return response;
     } catch (error) {
-      console.error('Error en UserService.createUser:', error);
+      console.error('Error en RegistroService.createUser:', error);
       
-      if (error instanceof Error) {
-        // Si es un error conocido, re-lanzarlo
-        throw error;
-      }
-      
-      // Si es un error desconocido, lanzar un error genérico
-      throw new Error('Error al crear el usuario');
+      // El HttpService ya maneja el mensaje para cédula duplicada, simplemente re-lanzar el error
+      throw error;
     }
   }
 }
 
 // Exportamos una instancia única del servicio
-export default new UserService();
+export default new RegistroService();

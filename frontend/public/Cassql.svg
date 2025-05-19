@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Fondo gris oscuro -->
+  <rect width="32" height="32" fill="#4e5359"/>
+  
+  <!-- Parte superior: flecha blanca apuntando a la derecha (desplazada hacia arriba) -->
+  <path d="M 4 11 L 22 11 L 22 7 L 28 15 L 22 15 L 4 15 Z" fill="#FFFFFF"/>
+  
+  <!-- Parte inferior: flecha azul apuntando a la izquierda (desplazada hacia abajo) -->
+  <path d="M 28 17 L 28 21 L 10 21 L 10 25 L 4 17 L 10 17 L 28 17 Z" fill="#00B4D8"/>
+</svg>
