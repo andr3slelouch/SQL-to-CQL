@@ -105,8 +105,7 @@ class AuthService {
     }
     
     setTimeout(() => {
-      // Aquí implementaríamos la lógica para refrescar el token
-      // Por ahora, simplemente mostramos una alerta cuando se acerque al tiempo de expiración
+      
       if (this.isAuthenticated()) {
         alert('Su sesión está por expirar. Por favor, vuelva a iniciar sesión.');
         this.logout();

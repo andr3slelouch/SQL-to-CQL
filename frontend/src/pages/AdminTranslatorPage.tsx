@@ -62,7 +62,6 @@ const AdminTranslatorPage: React.FC = () => {
       try {
         // Obtener keyspaces del usuario desde el backend
         const keyspaces = await KeyspaceService.getUserKeyspaces();
-        console.log("Keyspaces obtenidos:", keyspaces);
         setDatabases(keyspaces);
         
         // Si hay keyspaces disponibles, seleccionar el primero por defecto
@@ -137,8 +136,6 @@ const AdminTranslatorPage: React.FC = () => {
       // Crear el comando USE
       const useCommand = `USE ${keyspace};`;
       
-      console.log(`Enviando comando USE para keyspace: ${keyspace}`);
-      
       // Enviar el comando al backend
       const response = await HttpService.post<ExecuteResponse>(
         '/translator/execute',
@@ -160,8 +157,6 @@ const AdminTranslatorPage: React.FC = () => {
         const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
         setResults([{ mensaje }]);
         setColumns(['mensaje']);
-        
-        console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
       } else {
         const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
         setError(errorMsg);

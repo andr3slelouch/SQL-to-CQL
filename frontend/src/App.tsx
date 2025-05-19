@@ -1,5 +1,5 @@
 // src/App.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
 import Registro from './components/Registro';
@@ -23,6 +23,29 @@ import './styles/AdminLayout.css';
 import './styles/AdminTranslatorPage.css';
 
 const App: React.FC = () => {
+  // Añadir estilos para animaciones suaves
+  useEffect(() => {
+    // Estilos CSS para la animación de transición
+    const style = document.createElement('style');
+    style.innerHTML = `
+      /* Animación suave para todas las transiciones */
+      .admin-container {
+        animation: fadeIn 0.15s ease-in-out;
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0.98; }
+        to { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Limpiar al desmontar
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <Router>

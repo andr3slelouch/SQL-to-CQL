@@ -1,7 +1,7 @@
 // src/components/layouts/AdminLayout.tsx
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaArrowsAltH, FaKey, FaUserMinus, FaDatabase, FaCog, FaSignOutAlt, FaUserCircle, FaSearch } from 'react-icons/fa';
+import { FaArrowsAltH, FaKey, FaUserMinus, FaDatabase, FaCog, FaSignOutAlt, FaUserCircle } from 'react-icons/fa';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../styles/AdminLayout.css';
 
@@ -10,11 +10,11 @@ interface AdminLayoutProps {
   title?: string;
 }
 
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title }) => {
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children}) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  
+
   const menuItems = [
     { path: '/admin/translator', icon: <FaArrowsAltH />, text: 'Traductor' },
     { path: '/admin/generar-pin', icon: <FaKey />, text: 'Generar PIN' },
@@ -22,22 +22,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title }) => {
     { path: '/admin/asignar-bases', icon: <FaDatabase />, text: 'Asignar Bases de Datos' },
     { path: '/admin/configurar-permisos', icon: <FaCog />, text: 'Configurar Permisos' },
   ];
-  
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
-  
+
   return (
     <div className="admin-container">
       {/* Sidebar izquierdo */}
       <div className="admin-sidebar">
         <div className="admin-logo">CASSQL</div>
-        
         <div className="admin-menu">
           {menuItems.map((item) => (
-            <Link 
-              key={item.path} 
+            <Link
+              key={item.path}
               to={item.path}
               className={`admin-menu-item ${location.pathname === item.path ? 'active' : ''}`}
             >
@@ -46,13 +45,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title }) => {
             </Link>
           ))}
         </div>
-        
         <div className="admin-logout" onClick={handleLogout}>
           <span className="admin-menu-icon"><FaSignOutAlt /></span>
           <span>Salir</span>
         </div>
       </div>
-      
       {/* Contenido principal */}
       <div className="admin-main">
         {/* Barra superior con usuario en la esquina derecha */}
@@ -62,7 +59,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title }) => {
             <FaUserCircle className="admin-user-icon" />
           </div>
         </div>
-        
         {/* Contenido específico de la página */}
         <div className="admin-content">
           {children}

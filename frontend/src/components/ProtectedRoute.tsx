@@ -1,14 +1,11 @@
 // src/components/ProtectedRoute.tsx
-import React, { useEffect, useState, useRef, memo} from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
   redirectPath?: string;
 }
-
-// Para identificar componentes en console logs
-const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // Componente que solo muestra un indicador de carga
 const LoadingIndicator = memo(() => (
@@ -18,29 +15,43 @@ const LoadingIndicator = memo(() => (
   </div>
 ));
 
-// Componente que solo maneja la redirección
+// Componente que maneja la redirección y fuerza recarga para rutas admin
 const RedirectComponent = memo(({ to }: { to: string }) => {
-  console.log(`🚀 Redirigiendo a: ${to}`);
+  const isAdminRoute = to.startsWith('/admin/');
+  
+  useEffect(() => {
+    // Si estamos redirigiendo a una ruta de admin, verificar si debemos recargar
+    if (isAdminRoute) {
+      // Guardar la URL de destino en sessionStorage
+      sessionStorage.setItem('adminRedirectTo', to);
+      
+      // Forzar recarga después de la redirección
+      const timeoutId = setTimeout(() => {
+        if (window.location.pathname.startsWith('/admin/')) {
+          // Si no hay un parámetro 'reloaded', recargar
+          if (!window.location.search.includes('reloaded=true')) {
+            window.location.href = window.location.pathname + '?reloaded=true';
+          }
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [to, isAdminRoute]);
+  
   return <Navigate to={to} replace />;
 });
 
 // Definimos OutletWithMonitoring como un componente memoizado
 const OutletWithMonitoring = memo(() => {
   const location = useLocation();
-  const outletId = useRef(`outlet-${generateId()}`).current;
-  const renderCount = useRef(0);
-  
-  renderCount.current++;
   
   useEffect(() => {
-    console.log(`🟢 [${outletId}] Outlet MONTADO en ${location.pathname}`);
-    
-    return () => {
-      console.log(`🔴 [${outletId}] Outlet DESMONTADO en ${location.pathname}`);
-    };
-  }, []); // Solo ejecutar al montar/desmontar
-  
-  console.log(`🔄 [${outletId}] Outlet renderizado #${renderCount.current}`);
+    // Si estamos en una ruta de admin y tenemos un parámetro 'reloaded', limpiarlo
+    if (location.pathname.startsWith('/admin/') && location.search.includes('reloaded=true')) {
+      window.history.replaceState({}, document.title, location.pathname);
+    }
+  }, [location]);
   
   return <Outlet />;
 });
@@ -54,26 +65,35 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
   const [redirecting, setRedirecting] = useState<boolean>(false);
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-
-  // ID único para este componente (estático)
-  const componentId = useRef(`pr-logic-${generateId()}`).current;
-  const renderCount = useRef(0);
   
-  renderCount.current++;
-  
-  // Log de cada renderizado con contador para ver cuántos re-renders ocurren
-  console.log(`📊 [${componentId}] LOGIC renderizado #${renderCount.current} en ${location.pathname}`);
-  console.log(`   - Auth:`, { isAuthenticated, loading, localAuthChecked, isLocallyAuthenticated, redirecting });
-  
-  // Analizar parent renders
+  // Verificar si acabamos de redirigir a una ruta admin y necesitamos recargar
   useEffect(() => {
-    console.log(`📌 [${componentId}] LOGIC inicializado, stack:`, new Error().stack);
-  }, []);
+    if (location.pathname.startsWith('/admin/')) {
+      const redirectTo = sessionStorage.getItem('adminRedirectTo');
+      // Si esta URL coincide con la redirección guardada y no hay señal de recarga
+      if (redirectTo === location.pathname && !location.search.includes('reloaded=true')) {
+        // Verificar si ya recargamos esta sesión
+        const hasReloaded = sessionStorage.getItem('admin-route-reloaded');
+        if (!hasReloaded) {
+          // Marcar que hemos recargado
+          sessionStorage.setItem('admin-route-reloaded', 'true');
+          
+          // Forzar recarga
+          console.log('Recargando después de redirección a ruta de admin...');
+          window.location.reload();
+        }
+      }
+    } else {
+      // Limpiar el flag si salimos de una ruta de admin
+      sessionStorage.removeItem('admin-route-reloaded');
+    }
+  }, [location]);
+  
+  // Resto del código...
+  // [Mantén todo el código original a partir de aquí]
   
   // Verificar autenticación local UNA SOLA VEZ al montar el componente
   useEffect(() => {
-    console.log(`🔍 [${componentId}] Verificando autenticación local`);
-    
     // Verificar el token en localStorage directamente
     const token = localStorage.getItem('accessToken');
     const userDataStr = localStorage.getItem('userData');
@@ -104,7 +124,7 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
           setIsAdmin(false);
         }
       } catch (e) {
-        console.error(`❌ [${componentId}] Error en verificación local:`, e);
+        console.error('Error en verificación local:', e);
         setIsLocallyAuthenticated(false);
         setIsAdmin(false);
       }
@@ -114,17 +134,14 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
     }
     
     setLocalAuthChecked(true);
-    console.log(`✅ [${componentId}] Verificación local completada`);
-  }, []); // Solo se ejecuta al montar el componente
+  }, []);
   
   // Actualizar isAdmin cuando cambia el usuario del contexto
   useEffect(() => {
     if (!user) return;
     
     const newIsAdmin = user.rol === true;
-    
     if (newIsAdmin !== isAdmin) {
-      console.log(`👑 [${componentId}] Usuario rol actualizado a: ${newIsAdmin ? 'admin' : 'no-admin'}`);
       setIsAdmin(newIsAdmin);
     }
   }, [user, isAdmin]);
@@ -147,7 +164,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
     if (!isEffectivelyAuthenticated) {
       shouldRedirect = true;
       targetPath = redirectPath;
-      console.log(`🛡️ [${componentId}] Redirección por falta de autenticación: ${location.pathname} -> ${targetPath}`);
     } else {
       // Verificar permisos basados en roles
       const isAdminRoute = location.pathname.startsWith('/admin');
@@ -163,15 +179,11 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
           // Otras rutas de admin
           targetPath = '/translator';
         }
-        
-        console.log(`🛡️ [${componentId}] Usuario regular en zona admin: redirección ${location.pathname} -> ${targetPath}`);
       } 
       // Admin intentando acceder a traductor regular
       else if (location.pathname === '/translator' && isAdmin === true) {
         shouldRedirect = true;
         targetPath = '/admin/translator';
-        
-        console.log(`🛡️ [${componentId}] Admin en traductor regular: redirección ${location.pathname} -> ${targetPath}`);
       }
     }
     
@@ -188,8 +200,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
           
           // Si estamos intentando redirigir a un lugar desde donde ya fuimos redirigidos en los últimos 2 segundos
           if (from === targetPath && to === location.pathname && (now - lastRedirectTime) < 2000) {
-            console.warn(`⚠️ [${componentId}] ¡BUCLE DETECTADO! Cancelando redirección ${location.pathname} -> ${targetPath}`);
-            console.warn(`⚠️ [${componentId}] Redirección previa: ${from} -> ${to} hace ${(now - lastRedirectTime)}ms`);
             shouldRedirect = false;
           } else {
             // Registrar esta redirección para futuras comprobaciones
@@ -199,12 +209,16 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
               timestamp: new Date().toISOString()
             }));
             
-            console.log(`➡️ [${componentId}] Iniciando redirección ${location.pathname} -> ${targetPath}`);
+            // Guardar la URL de destino para que RedirectComponent sepa si debe recargar
+            if (targetPath.startsWith('/admin/')) {
+              sessionStorage.setItem('adminRedirectTo', targetPath);
+            }
+            
             setRedirecting(true);
             setRedirectTo(targetPath);
           }
         } catch (e) {
-          console.error(`❌ [${componentId}] Error al procesar lastRedirect:`, e);
+          console.error('Error al procesar lastRedirect:', e);
           shouldRedirect = false; // Prevenir redirección si hay error en el parsing
         }
       } else {
@@ -215,7 +229,11 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
           timestamp: new Date().toISOString()
         }));
         
-        console.log(`➡️ [${componentId}] Primera redirección ${location.pathname} -> ${targetPath}`);
+        // Guardar la URL de destino para que RedirectComponent sepa si debe recargar
+        if (targetPath.startsWith('/admin/')) {
+          sessionStorage.setItem('adminRedirectTo', targetPath);
+        }
+        
         setRedirecting(true);
         setRedirectTo(targetPath);
       }
@@ -254,22 +272,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
 
 // El componente principal es muy simple y usa la lógica aislada
 const ProtectedRoute: React.FC<ProtectedRouteProps> = (props) => {
-  const componentId = useRef(`pr-main-${generateId()}`).current;
-  const renderCount = useRef(0);
-  
-  renderCount.current++;
-  
-  // Log de montaje/desmontaje del componente
-  useEffect(() => {
-    console.log(`🟢 [${componentId}] ProtectedRoute PRINCIPAL MONTADO`);
-    
-    return () => {
-      console.log(`🔴 [${componentId}] ProtectedRoute PRINCIPAL DESMONTADO`);
-    };
-  }, []);
-  
-  console.log(`🔄 [${componentId}] ProtectedRoute PRINCIPAL renderizado #${renderCount.current}`);
-  
   return <ProtectedRouteLogic {...props} />;
 };
 

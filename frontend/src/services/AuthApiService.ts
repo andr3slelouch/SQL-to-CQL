@@ -76,12 +76,7 @@ class AuthApiService {
     }
     
     try {
-      // Aquí podríamos implementar un endpoint para verificar el token
-      // Por ejemplo:
-      // const response = await HttpService.get<{valid: boolean}>('/auth/verify-token');
-      // return response.valid;
       
-      // Por ahora, simplemente verificamos localmente
       return AuthService.isAuthenticated();
     } catch (error) {
       console.error('Error al verificar el token:', error);
@@ -91,9 +86,7 @@ class AuthApiService {
 
   // Método para cerrar sesión
   logout(): void {
-    // Aquí podríamos implementar un endpoint para invalidar el token en el servidor
-    // Por ejemplo:
-    // await HttpService.post('/auth/logout', {});
+    
     
     // Limpiamos la información de autenticación local
     AuthService.logout();
