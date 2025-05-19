@@ -2,8 +2,8 @@ import {
   Controller, 
   Post, 
   Body, 
-  Get,          // NUEVO IMPORT
-  Param,        // NUEVO IMPORT
+  Get,          
+  Param,        
   ValidationPipe, 
   HttpCode, 
   HttpStatus,
@@ -16,7 +16,7 @@ import { VerifyUserCredentialsDto, ChangePasswordDto, GenerateTempPinDto } from 
 export class ChangePasswordController {
   constructor(private readonly changePasswordService: ChangePasswordService) {}
 
-  // NUEVO ENDPOINT PARA BUSCAR POR CÉDULA
+  // ENDPOINT PARA BUSCAR POR CÉDULA
   @Get('find-by-cedula/:cedula')
   @HttpCode(HttpStatus.OK)
   async findUserByCedula(@Param('cedula') cedula: string): Promise<{ 

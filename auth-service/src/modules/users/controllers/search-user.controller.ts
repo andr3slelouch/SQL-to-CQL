@@ -16,7 +16,7 @@ export class SearchUserController {
       throw new NotFoundException(`No se encontró un usuario con la cédula: ${searchUserDto.cedula}`);
     }
     
-    // Retornar solo los datos seguros (sin contraseña ni pin)
+    // Retornar solo los datos seguros 
     return {
       cedula: user.cedula,
       nombre: user.nombre,

@@ -26,7 +26,7 @@ export class JwtAuthGuard implements CanActivate {
       // Adjuntar el usuario al request para uso posterior
       request.user = payload;
       
-      // Verificar roles requeridos (si existen)
+      // Verificar roles requeridos 
       const requiredRoles = this.reflector.get<boolean[]>('roles', context.getHandler());
       
       if (requiredRoles && requiredRoles.length) {

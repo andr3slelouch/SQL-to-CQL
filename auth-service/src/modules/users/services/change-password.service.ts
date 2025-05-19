@@ -111,7 +111,7 @@ export class ChangePasswordService {
         this.tempPins.delete(cedula);
       }
       
-      // Actualizar contraseña y PIN (si es necesario)
+      // Actualizar contraseña y PIN de ser necesario
       const updateQuery = 'UPDATE auth.users SET contrasena = ?, pin = ? WHERE cedula = ?';
       await this.cassandraClient.execute(
         updateQuery, 

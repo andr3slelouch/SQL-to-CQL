@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Inject, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Inject, Logger, ConflictException } from '@nestjs/common';
 import { Client } from 'cassandra-driver';
 import { CASSANDRA_CLIENT } from '../../../database/cassandra.provider';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -22,6 +22,9 @@ export class CreateUserService {
    */
   async create(createUserDto: CreateUserDto): Promise<UserCreateResponse> {
     const { cedula, name, password } = createUserDto;
+    
+    // Verificar si la cédula ya existe en la tabla permissions (sin hash)
+    await this.checkIfCedulaExistsInPermissions(cedula);
     
     // Encriptar cédula y contraseña
     const hashedCedula = await hashPassword(cedula);
@@ -65,7 +68,7 @@ export class CreateUserService {
       
       await this.cassandraClient.execute(
         permissionsQuery,
-        [cedula, emptyKeyspaces, defaultOperations],
+        [cedula, emptyKeyspaces, defaultOperations],  // Cédula sin hash para permisos
         { prepare: true }
       );
       
@@ -79,6 +82,32 @@ export class CreateUserService {
     } catch (error) {
       this.logger.error(`Error al crear el usuario: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Error al crear el usuario');
+    }
+  }
+
+  /**
+   * Verifica si la cédula ya existe en la tabla permissions
+   * @param cedula Cédula a verificar
+   * @throws ConflictException si la cédula ya existe
+   */
+  private async checkIfCedulaExistsInPermissions(cedula: string): Promise<void> {
+    try {
+      const query = 'SELECT cedula FROM auth.permissions WHERE cedula = ? ALLOW FILTERING';
+      const result = await this.cassandraClient.execute(query, [cedula], { prepare: true });
+      
+      if (result.rowLength > 0) {
+        this.logger.warn(`Intento de crear usuario con cédula duplicada: ${cedula}`);
+        throw new ConflictException(`Ya existe un usuario con la cédula ${cedula}`);
+      }
+    } catch (error) {
+      // Si el error es nuestro ConflictException, lo propagamos
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      
+      // Para otros errores, registramos y lanzamos un error genérico
+      this.logger.error(`Error al verificar si la cédula existe en permissions: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al verificar si el usuario existe');
     }
   }
 

@@ -4,11 +4,11 @@ import { join } from 'path';
 
 /**
  * Configuración para utilizar Cassandra con TypeORM
- * Nota: TypeORM tiene soporte limitado para Cassandra
+ * 
  */
 export const getTypeOrmConfig = (configService: ConfigService): TypeOrmModuleOptions => {
   return {
-    type: 'cockroachdb', // Usamos cockroachdb como tipo compatible
+    type: 'cockroachdb', // Uso de cockroachdb como tipo compatible
     host: configService.get('DB_HOST', 'localhost'),
     port: configService.get<number>('DB_PORT', 9042),
     username: configService.get('DB_USERNAME', ''),

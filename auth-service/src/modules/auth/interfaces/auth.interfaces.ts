@@ -18,6 +18,6 @@ export interface LoginResponse {
     sub: string; // cedula del usuario
     nombre: string;
     rol: boolean;
-    iat?: number; // issued at
-    exp?: number; // expires
+    iat?: number; 
+    exp?: number; 
   }

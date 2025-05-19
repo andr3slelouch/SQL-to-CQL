@@ -51,7 +51,7 @@ export class AuthService {
         throw new UnauthorizedException('Credenciales inválidas');
       }
       
-      // Si llegamos aquí, las credenciales son válidas
+      // las credenciales son válidas
       // Limpiar intentos fallidos
       this.failedAttempts.delete(cedula);
       
