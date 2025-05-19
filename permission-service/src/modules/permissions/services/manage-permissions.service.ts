@@ -23,7 +23,7 @@ export class ManagePermissionsService {
     private httpService: HttpService,
     private configService: ConfigService
   ) {
-    // Usamos la URL base sin prefijos adicionales
+    
     this.translatorServiceUrl = this.configService.get<string>('TRANSLATOR_SERVICE_URL', 'http://localhost:3000');
     this.logger.log(`ManagePermissionsService inicializado con URL del servicio de traducción: ${this.translatorServiceUrl}`);
   }
@@ -48,7 +48,7 @@ export class ManagePermissionsService {
 
       if (result.rowLength === 0) {
         // El usuario existe pero no tiene permisos registrados
-        // Esto podría ocurrir si se eliminaron los permisos pero no el usuario
+        
         return {
           cedula: cedula,
           nombre: user.nombre,
@@ -146,7 +146,7 @@ export class ManagePermissionsService {
       const updateQuery = 'UPDATE auth.permissions SET operaciones = ? WHERE cedula = ?';
       await this.cassandraClient.execute(updateQuery, [operaciones, cedula], { prepare: true });
 
-      // CORREGIDO: Notificar al microservicio de traducción sobre el cambio usando la ruta correcta
+      
       await this.notifyPermissionChange(cedula);
 
       // Devolver los permisos actualizados
@@ -186,12 +186,12 @@ export class ManagePermissionsService {
   }
 
   /**
-   * CORREGIDO: Notifica al microservicio de traducción sobre un cambio en los permisos de un usuario
+   * 
    * @param cedula Cédula del usuario cuyos permisos han cambiado
    */
   private async notifyPermissionChange(cedula: string, retries = 3): Promise<void> {
     try {
-      // URL corregida con el prefijo 'api' y la ruta completa a 'translator/cache/invalidate'
+      
       const url = `${this.translatorServiceUrl}/api/translator/cache/invalidate`;
       
       this.logger.log(`Notificando cambio de permisos para usuario ${cedula} a ${url}`);
@@ -206,7 +206,7 @@ export class ManagePermissionsService {
     } catch (error) {
       this.logger.error(`Error al notificar cambio de permisos: ${error.message}`, error.stack);
       
-      // Implementación de reintentos para mejorar la resiliencia
+      
       if (retries > 0) {
         this.logger.warn(`Reintentando notificación (${retries} intentos restantes)...`);
         // Esperar un tiempo antes de reintentar (exponential backoff)

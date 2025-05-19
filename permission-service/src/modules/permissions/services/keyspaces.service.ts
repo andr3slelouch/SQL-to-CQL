@@ -25,7 +25,7 @@ export class KeyspacesService {
   
   // Caché en memoria exclusivo para las tablas de keyspaces
   private tablesCache: Map<string, { tables: string[], timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+  private readonly CACHE_TTL = 30 * 1000; // 30 segundos (cambiar a 5 minutos)
 
   constructor(
     @Inject(CASSANDRA_CLIENT)
@@ -191,7 +191,7 @@ export class KeyspacesService {
         throw new NotFoundException(`Los siguientes keyspaces no existen: ${invalidKeyspaces.join(', ')}`);
       }
 
-      // Si el usuario es administrador, permitimos la actualización pero registramos el evento
+      // Si el usuario es administrador, permitimos la actualización 
       if (user.rol === true) {
         this.logger.log(`Actualizando keyspaces de un administrador: ${cedula}`);
         // Obtenemos todos los keyspaces disponibles

@@ -32,7 +32,7 @@ export class ChangeRoleService {
     // Modificamos la respuesta para mostrar la cédula sin encriptar
     return {
       ...user,
-      cedula: cedula // Reemplazamos la cédula encriptada con la cédula original
+      cedula: cedula 
     };
   }
 

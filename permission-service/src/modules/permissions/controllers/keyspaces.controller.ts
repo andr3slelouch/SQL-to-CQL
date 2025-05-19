@@ -36,7 +36,7 @@ export class KeyspacesController {
     return this.keyspacesService.updateSingleKeyspace(keyspaceUpdateDto);
   }
 
-  // Nuevo endpoint para obtener tablas de un keyspace
+  
   @Get('tables')
   async getKeyspaceTables(@Query('keyspace') keyspace: string): Promise<{ tables: string[] }> {
     if (!keyspace) {
@@ -45,7 +45,7 @@ export class KeyspacesController {
     return this.keyspacesService.getKeyspaceTables(keyspace);
   }
 
-  // Endpoint para invalidar todo el caché de tablas (sin parámetro)
+  
   @Delete('cache/tables')
   @Roles(true) // Solo administradores
   async invalidateAllTablesCache(): Promise<{ message: string }> {
@@ -53,7 +53,7 @@ export class KeyspacesController {
     return { message: 'Todo el caché de tablas ha sido invalidado' };
   }
 
-  // Endpoint para invalidar el caché de un keyspace específico
+  
   @Delete('cache/tables/:keyspace')
   @Roles(true) // Solo administradores
   async invalidateKeyspaceTablesCache(@Param('keyspace') keyspace: string): Promise<{ message: string }> {
