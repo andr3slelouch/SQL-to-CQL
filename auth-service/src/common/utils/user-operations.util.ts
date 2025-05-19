@@ -4,7 +4,7 @@
 export const StandardOperations = [
     // Operaciones de Lectura
     'SELECT',
-    'USE KEYSPACE',
+    'USE',
     
     // Operaciones de Escritura
     'INSERT',
