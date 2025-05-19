@@ -103,7 +103,7 @@ export class DatabaseTranslator implements Translator {
   }
   
   /**
-   * Crea un comentario para errores
+   * 
    * @param errorMessage Mensaje de error
    * @returns Comentario SQL
    */

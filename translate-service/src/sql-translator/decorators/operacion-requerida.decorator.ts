@@ -5,6 +5,6 @@ export const OPERACION_REQUERIDA = 'operacion_requerida';
 
 /**
  * Decorador para establecer la operación SQL requerida en un controlador
- * @param operacion Operación SQL (SELECT, INSERT, UPDATE, DELETE, etc.)
+ * @param operacion Operación SQL
  */
 export const OperacionRequerida = (operacion: string) => SetMetadata(OPERACION_REQUERIDA, operacion);

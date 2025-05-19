@@ -32,7 +32,7 @@ export class UpdateTranslator implements Translator {
       const whereClause = this.buildWhereClause(ast);
       const ifClause = this.buildIfClause(ast);
       
-      // Verificar si hay cláusula WHERE (requerida en Cassandra)
+      // Verificar si hay cláusula WHERE 
       if (!whereClause) {
         this.logger.warn('Cassandra requiere una cláusula WHERE para operaciones UPDATE');
         throw new Error('La sentencia UPDATE debe incluir una cláusula WHERE para Cassandra');
@@ -90,8 +90,6 @@ export class UpdateTranslator implements Translator {
       const column = item.column;
       const value = this.formatValue(item.value);
       
-      // Cassandra soporta operadores como += y -= para colecciones
-      // pero no lo implementamos aquí por simplicidad
       
       return `${column} = ${value}`;
     });
@@ -118,8 +116,7 @@ export class UpdateTranslator implements Translator {
    * @returns Cláusula IF formateada o null si no existe
    */
   private buildIfClause(ast: any): string | null {
-    // En SQL no hay un equivalente directo a IF en Cassandra
-    // Se implementaría aquí si el parser reconociera alguna construcción similar
+  
     return null;
   }
   
@@ -236,7 +233,5 @@ export class UpdateTranslator implements Translator {
       this.logger.warn('Cassandra no soporta LIMIT en UPDATE. Se ignorará esta parte.');
     }
     
-    // Cassandra no soporta actualizaciones en columnas de clave primaria
-    // No podemos validar esto sin conocer el esquema
   }
 }

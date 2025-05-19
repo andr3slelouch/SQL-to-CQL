@@ -14,12 +14,11 @@ export class ExecutionTranslator implements Translator {
   ) {}
 
   canHandle(ast: any): boolean {
-    // Este traductor no maneja traducciones, solo ejecuciones
+    
     return false;
   }
 
   translate(ast: any): string {
-    // No implementamos este método ya que este traductor no realiza traducciones
     return '';
   }
 
@@ -40,12 +39,21 @@ export class ExecutionTranslator implements Translator {
       // Verificar si la consulta es un BATCH (para inserts múltiples)
       const isBatch = cql.includes('BEGIN BATCH') && cql.includes('APPLY BATCH');
       
+      // Verificar si la consulta es un DROP INDEX
+      const isDropIndex = cql.trim().toUpperCase().startsWith('DROP INDEX');
+      
       let result;
       
       if (isBatch) {
         // Si es un BATCH, usar el método específico para ejecutar BATCH
         this.logger.log(`Detectado BATCH en consulta CQL, usando executeBatchFromString`);
         result = await this.cassandraService.executeBatchFromString(cql);
+      } else if (isDropIndex) {
+        // Manejo especial para DROP INDEX
+        this.logger.log(`Detectado DROP INDEX, asegurando formato correcto: ${cql}`);
+        // Asegurarse de que la consulta termina con punto y coma
+        const finalCql = cql.trim().endsWith(';') ? cql : `${cql};`;
+        result = await this.cassandraService.execute(finalCql);
       } else {
         // Ejecutar la consulta normal en Cassandra
         result = await this.cassandraService.execute(cql);

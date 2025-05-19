@@ -105,7 +105,7 @@ export class OperatorsTranslator implements Translator {
     if (['CAST', 'CONVERT'].includes(upperFuncName)) {
       // CQL tiene funciones de conversión como toTimestamp(), toDate(), etc.
       this.logger.warn(`La función '${funcName}' se debe traducir manualmente según el tipo de destino`);
-      return upperFuncName; // Esto necesitaría más procesamiento en el traductor específico
+      return upperFuncName; 
     }
     
     // Funciones de cadena

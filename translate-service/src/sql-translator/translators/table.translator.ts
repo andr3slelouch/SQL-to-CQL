@@ -321,7 +321,7 @@ export class TableTranslator implements Translator {
           this.logger.debug(`Columna ${columnName} detectada como clave primaria en la definición`);
         }
         
-        // Verificar si esta columna es una clave primaria (método anterior)
+        // Verificar si esta columna es una clave primaria 
         if (def.definition.primary_key) {
           if (!primaryKeyColumns.includes(columnName)) {
             primaryKeyColumns.push(columnName);

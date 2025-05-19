@@ -28,8 +28,19 @@ export class SqlParserService {
     try {
       this.logger.debug(`Analizando consulta SQL: ${sqlQuery}`);
       
+      // Preprocesar la consulta SQL para manejar casos especiales
+      const processedQuery = this.preprocessQuery(sqlQuery);
+      if (processedQuery !== sqlQuery) {
+        this.logger.debug(`Consulta SQL preprocesada: ${processedQuery}`);
+      }
+      
       // Realizar el análisis sintáctico para obtener el AST
-      const ast = this.parser.astify(sqlQuery);
+      const ast = this.parser.astify(processedQuery);
+      
+      // Si es un DROP INDEX de Cassandra, marcar el AST para que el traductor lo reconozca
+      if (this.isCassandraDropIndex(sqlQuery)) {
+        this.markAsCassandraDropIndex(ast, sqlQuery);
+      }
       
       // Determinar el tipo de consulta
       const type = this.determineQueryType(ast);
@@ -40,12 +51,121 @@ export class SqlParserService {
         type
       };
     } catch (error) {
+      // Intentar manejo especial para DROP INDEX si falla el parsing normal
+      if (this.isCassandraDropIndex(sqlQuery)) {
+        try {
+          const specialAst = this.createSpecialDropIndexAst(sqlQuery);
+          this.logger.debug(`Creado AST especial para DROP INDEX: ${JSON.stringify(specialAst)}`);
+          return {
+            success: true,
+            ast: specialAst,
+            type: 'drop'
+          };
+        } catch (specialError) {
+          this.logger.error(`Error al crear AST especial para DROP INDEX: ${specialError.message}`);
+        }
+      }
+      
       this.logger.error(`Error al analizar consulta SQL: ${error.message}`);
       return {
         success: false,
         error: error.message
       };
     }
+  }
+
+  /**
+   * Preprocesa la consulta SQL para manejar casos especiales como DROP INDEX en Cassandra
+   * @param query Consulta SQL original
+   * @returns Consulta SQL procesada lista para el parser
+   */
+  private preprocessQuery(query: string): string {
+    const trimmedQuery = query.trim();
+    const upperQuery = trimmedQuery.toUpperCase();
+    
+    // Caso especial: DROP INDEX en Cassandra
+    if (this.isCassandraDropIndex(trimmedQuery)) {
+      // Extraer el nombre del índice y si hay IF EXISTS
+      const dropIndexRegex = /DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([^\s;]+)/i;
+      const matches = trimmedQuery.match(dropIndexRegex);
+      
+      if (matches && matches[2]) {
+        const ifExists = matches[1] || '';
+        const indexName = matches[2];
+        
+        // Convertir a formato compatible con el parser SQL estándar
+        return `DROP INDEX ${ifExists}${indexName} ON dummy_table`;
+      }
+    }
+    
+    return trimmedQuery;
+  }
+
+  /**
+   * Verifica si la consulta es un DROP INDEX de Cassandra
+   * @param query Consulta SQL
+   * @returns true si es un DROP INDEX de Cassandra
+   */
+  private isCassandraDropIndex(query: string): boolean {
+    const upperQuery = query.trim().toUpperCase();
+    return upperQuery.startsWith('DROP INDEX') && !upperQuery.includes(' ON ');
+  }
+
+  /**
+   * Marca un AST como DROP INDEX de Cassandra para que el traductor lo reconozca
+   * @param ast AST a marcar
+   * @param originalQuery Consulta original
+   */
+  private markAsCassandraDropIndex(ast: any, originalQuery: string): void {
+    if (Array.isArray(ast)) {
+      ast.forEach(item => {
+        if (item.type === 'drop') {
+          item.cassandra_drop_index = true;
+          
+          // Extraer el nombre real del índice de la consulta original
+          const matches = originalQuery.match(/DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([^\s;]+)/i);
+          if (matches && matches[2]) {
+            item.real_index_name = matches[2];
+            item.if_exists = !!matches[1];
+          }
+        }
+      });
+    } else if (ast.type === 'drop') {
+      ast.cassandra_drop_index = true;
+      
+      // Extraer el nombre real del índice de la consulta original
+      const matches = originalQuery.match(/DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([^\s;]+)/i);
+      if (matches && matches[2]) {
+        ast.real_index_name = matches[2];
+        ast.if_exists = !!matches[1];
+      }
+    }
+  }
+
+  /**
+   * Crea un AST especial para DROP INDEX de Cassandra cuando el parser normal falla
+   * @param query Consulta DROP INDEX original
+   * @returns AST especial para DROP INDEX
+   */
+  private createSpecialDropIndexAst(query: string): any {
+    // Extraer el nombre del índice y si hay IF EXISTS
+    const matches = query.match(/DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([^\s;]+)/i);
+    if (!matches || !matches[2]) {
+      throw new Error('No se pudo extraer el nombre del índice de la consulta DROP INDEX');
+    }
+    
+    const ifExists = !!matches[1];
+    const indexName = matches[2];
+    
+    // Crear un AST con la estructura necesaria para IndexTranslator
+    return {
+      type: 'drop',
+      keyword: 'index',
+      cassandra_drop_index: true,
+      name: indexName,
+      if_exists: ifExists,
+      real_index_name: indexName
+    };
   }
 
   /**

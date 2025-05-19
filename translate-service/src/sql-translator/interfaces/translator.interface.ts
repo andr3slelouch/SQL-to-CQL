@@ -15,7 +15,7 @@ export interface Translator {
     canHandle(ast: any): boolean;
   }
   
-  // src/sql-translator/interfaces/sql-to-cql.interface.ts
+  
   export interface SqlToCqlResult {
     success: boolean;
     cql?: string;

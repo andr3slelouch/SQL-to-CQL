@@ -82,12 +82,10 @@ export class CassandraService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Obtiene el cliente de Cassandra actual
-   * @param token Token JWT opcional (no utilizado en esta implementación)
+   * @param token 
    * @returns Cliente de Cassandra
    */
   async getClient(token?: string): Promise<Client> {
-    // En esta implementación actual, ignoramos el token y devolvemos el cliente predeterminado
-    // Si en el futuro quieres implementar conexiones por usuario, puedes usar el token
     return this.client;
   }
 
@@ -126,8 +124,6 @@ export class CassandraService implements OnModuleInit, OnModuleDestroy {
       // Ejecutar el batch
       const result = await this.client.batch(batchQueries, { prepare: true });
       
-      // El resultado de batch no tiene wasApplied, así que no lo verificamos
-      // En su lugar, si llegamos aquí es que se aplicó correctamente
       this.logger.log(`Batch ejecutado con éxito.`);
       
       return {

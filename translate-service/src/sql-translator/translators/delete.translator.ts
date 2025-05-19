@@ -91,7 +91,6 @@ export class DeleteTranslator implements Translator {
    */
   private buildIfClause(ast: any): string | null {
     // En SQL no hay un equivalente directo a IF en Cassandra
-    // Se implementaría aquí si el parser reconociera alguna construcción similar
     return null;
   }
   

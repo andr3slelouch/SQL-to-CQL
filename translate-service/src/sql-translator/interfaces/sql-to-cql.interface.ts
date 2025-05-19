@@ -14,7 +14,7 @@ export interface TranslationOptions {
   validateOnly?: boolean;
   throwOnError?: boolean;
   targetVersion?: string;
-  executeInCassandra?: boolean;  // Añadido esta propiedad
-  token?: string;                // Añadido esta propiedad
-  user?: any;                    // Añadido esta propiedad
+  executeInCassandra?: boolean; 
+  token?: string;                
+  user?: any;                    
 }

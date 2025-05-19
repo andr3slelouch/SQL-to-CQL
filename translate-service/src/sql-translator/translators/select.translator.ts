@@ -217,7 +217,6 @@ export class SelectTranslator implements Translator {
    */
   private translateOrderBy(orderby: any[]): string {
     // Cassandra solo permite ORDER BY en columnas que sean parte de la clave de clustering
-    // No podemos validar eso aquí sin conocer el esquema, pero podemos traducir la sintaxis
     
     const orderByItems: string[] = [];
     
@@ -290,7 +289,5 @@ export class SelectTranslator implements Translator {
       this.logger.warn('Cassandra no soporta UNION/INTERSECT/EXCEPT directamente. La consulta no se traducirá correctamente.');
     }
     
-    // Subconsultas - No soportadas directamente en Cassandra
-    // Sería necesario un análisis más profundo para detectarlas
   }
 }

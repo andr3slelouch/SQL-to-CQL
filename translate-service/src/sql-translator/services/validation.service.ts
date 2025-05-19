@@ -157,8 +157,7 @@ export class ValidationService {
       errors.push('Cassandra requiere una cláusula WHERE para operaciones UPDATE');
     }
     
-    // Verificar si se está actualizando una clave primaria (no permitido en Cassandra)
-    // Nota: Esto requeriría conocimiento del esquema, lo cual no tenemos aquí
+    
   }
   
   /**
@@ -214,7 +213,6 @@ export class ValidationService {
    */
   private validateCreateDatabaseStatement(statement: any, errors: string[]): void {
     // En Cassandra, los KEYSPACE requieren estrategia de replicación
-    // Pero lo manejaremos en la traducción
   }
   
   /**
@@ -244,7 +242,6 @@ export class ValidationService {
    */
   private validateAlterTableStatement(statement: any, errors: string[]): void {
     // Cassandra no permite modificar la clave primaria una vez creada
-    // Pero esto requeriría conocimiento del esquema actual
   }
   
   /**

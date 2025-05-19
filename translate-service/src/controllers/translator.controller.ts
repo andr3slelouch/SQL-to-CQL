@@ -113,7 +113,6 @@ export class TranslatorController {
 
   /**
    * Método para procesar la sentencia SQL antes de ejecutarla
-   * Ajusta la sintaxis de ciertos comandos problemáticos
    * @param sql Sentencia SQL original
    * @returns Sentencia SQL procesada
    */
@@ -121,13 +120,31 @@ export class TranslatorController {
     const sqlTrim = sql.trim();
     const sqlUpper = sqlTrim.toUpperCase();
     
-    // Manejo de SHOW DATABASES/SCHEMAS - asegurarnos de traducir correctamente
+    // Manejo específico para DROP INDEX
+    if (sqlUpper.startsWith('DROP INDEX')) {
+      // Si el comando DROP INDEX no contiene ON y termina después del nombre del índice
+      if (!sqlUpper.includes(' ON ')) {
+        const dropIndexMatch = sqlUpper.match(/^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s;]+)$/i);
+        if (dropIndexMatch) {
+          // Extraer el nombre del índice
+          const originalSql = sql.match(/^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s;]+)$/i);
+          const indexName = originalSql ? originalSql[1] : dropIndexMatch[1];
+          const ifExists = sqlUpper.includes('IF EXISTS') ? 'IF EXISTS ' : '';
+          
+          // No necesitamos modificar la sentencia ya que sql-parser.service ahora maneja este caso
+          this.logger.log(`[TRANSLATOR] Detectada sentencia DROP INDEX sin ON: ${indexName}`);
+          return sql;
+        }
+      }
+    }
+    
+    // Manejo de SHOW DATABASES/SCHEMAS
     if (sqlUpper === 'SHOW DATABASES' || sqlUpper === 'SHOW SCHEMAS') {
       this.logger.log(`[TRANSLATOR] Ajustando sentencia SHOW DATABASES/SCHEMAS a DESCRIBE KEYSPACES`);
       return 'DESCRIBE KEYSPACES';
     }
     
-    // Manejo de DESCRIBE TABLE KEYSPACES - corregir confusión
+    // Manejo de DESCRIBE TABLE KEYSPACES
     if (sqlUpper === 'DESCRIBE TABLE KEYSPACES' || sqlUpper === 'DESC TABLE KEYSPACES') {
       this.logger.log(`[TRANSLATOR] Corrigiendo DESCRIBE TABLE KEYSPACES a DESCRIBE KEYSPACES`);
       return 'DESCRIBE KEYSPACES';
@@ -135,11 +152,11 @@ export class TranslatorController {
     
     // Manejo de DESCRIBE TABLE nombreTabla
     if (sqlUpper.startsWith('DESCRIBE TABLE ') || sqlUpper.startsWith('DESC TABLE ')) {
-      // Asegurarnos de que no estemos intentando describir una tabla llamada "KEYSPACES"
+      
       if (!sqlUpper.endsWith(' KEYSPACES')) {
         const partes = sqlTrim.split(' ');
         if (partes.length >= 3) {
-          // Extraer el nombre de la tabla (puede tener espacios)
+          // Extraer el nombre de la tabla puede tener espacios
           const tableName = partes.slice(2).join(' ').trim();
           // Componer la sentencia CQL directamente
           this.logger.log(`[TRANSLATOR] Ajustando sentencia DESCRIBE TABLE para tabla: ${tableName}`);
@@ -154,7 +171,7 @@ export class TranslatorController {
 
   /**
    * Endpoint para invalidar la caché de permisos
-   * No se requiere autenticación para permitir comunicación entre microservicios
+   *
    */
   @Post('cache/invalidate')
   async invalidateCache(@Body() body: { cedula?: string }) {
@@ -184,6 +201,14 @@ export class TranslatorController {
     try {
       // Verificar abreviaturas comunes antes del parsing
       const sqlUpper = sql.trim().toUpperCase();
+
+      // CASO ESPECIAL: Verificación directa para DROP INDEX
+      if (sqlUpper.startsWith('DROP INDEX') || 
+          sqlUpper.startsWith('DROP IF EXISTS INDEX') ||
+          sqlUpper.includes('DROP INDEX')) {
+        this.logger.log(`[TRANSLATOR] Detectado comando DROP INDEX explícito: ${sqlUpper}`);
+        return 'DROP INDEX';
+      }
 
       // CASO ESPECIAL: Verificación directa para DESCRIBE KEYSPACES
       if (sqlUpper === 'DESCRIBE KEYSPACES') {
@@ -244,6 +269,12 @@ export class TranslatorController {
         // Manejar comandos específicos cuando el parser falla
         this.logger.warn(`[TRANSLATOR] No se pudo parsear la sentencia SQL: ${sql}`);
         
+        // Manejo especial para DROP INDEX cuando el parser falla
+        if (sqlUpper.startsWith('DROP INDEX') || sqlUpper.includes('DROP INDEX')) {
+          this.logger.log(`[TRANSLATOR] Detectada operación DROP INDEX por texto cuando el parser falló`);
+          return 'DROP INDEX';
+        }
+        
         // Manejar comandos DESCRIBE
         if (sqlUpper.startsWith('DESCRIBE ') || sqlUpper.startsWith('DESC ')) {
           // Si contiene "KEYSPACES" específicamente
@@ -287,6 +318,12 @@ export class TranslatorController {
         return 'UNKNOWN';
       }
 
+      // Comprobar si el AST tiene la marca especial para DROP INDEX de Cassandra
+      if (statement.cassandra_drop_index) {
+        this.logger.log(`[TRANSLATOR] Detectado AST marcado como DROP INDEX de Cassandra`);
+        return 'DROP INDEX';
+      }
+
       // Mapear operación según el tipo y devolver en formato estándar
       return this.mapearOperacionAFormatoEstandar(statement, sqlUpper);
     } catch (error) {
@@ -304,6 +341,21 @@ export class TranslatorController {
    * @returns Operación normalizada
    */
   private mapearOperacionAFormatoEstandar(statement: any, sqlUpper: string): string {
+    // Añadir logging para diagnóstico
+    if (statement.type === 'drop') {
+      this.logger.debug(`[TRANSLATOR] Detalles de operación DROP: ${JSON.stringify(statement)}`);
+    }
+
+    // Verificación directa para comandos DROP INDEX
+    if (sqlUpper.startsWith('DROP INDEX') || sqlUpper.includes('DROP INDEX') || 
+        (statement.type === 'drop' && 
+         (statement.keyword === 'index' || 
+          statement.cassandra_drop_index ||
+          (statement.name && typeof statement.name === 'object' && statement.name.column)))) {
+      this.logger.log(`[TRANSLATOR] Detectado DROP INDEX en mapeo de operaciones`);
+      return 'DROP INDEX';
+    }
+
     // Verificación directa para DESCRIBE KEYSPACES (prioridad alta)
     if (sqlUpper === 'DESCRIBE KEYSPACES' || sqlUpper.includes('SHOW DATABASE')) {
       this.logger.log(`[TRANSLATOR] Detectado DESCRIBE KEYSPACES exacto en mapeo`);

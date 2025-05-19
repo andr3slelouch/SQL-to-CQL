@@ -18,8 +18,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    // Aquí podríamos hacer validaciones adicionales si fuera necesario
-    // Por ejemplo, verificar si el usuario sigue activo en la base de datos
 
     return {
       cedula: payload.sub,

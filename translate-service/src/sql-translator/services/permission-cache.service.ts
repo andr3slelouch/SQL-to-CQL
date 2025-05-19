@@ -55,7 +55,7 @@ export class PermissionCacheService {
    * Obtiene los permisos de operaciones SQL de un usuario
    * @param cedula Cédula del usuario
    * @param token Token JWT del usuario
-   * @returns Lista de operaciones permitidas (SELECT, INSERT, UPDATE, DELETE, etc.)
+   * @returns Lista de operaciones permitidas 
    */
   async getPermisosOperaciones(cedula: string, token: string): Promise<string[]> {
     this.logger.log(`[CACHÉ DEBUG] Solicitando permisos para usuario: ${cedula}`);
@@ -122,7 +122,7 @@ export class PermissionCacheService {
    */
   private async cargarPermisosDesdeAPI(cedula: string, token: string): Promise<string[]> {
     try {
-      // Usar el endpoint que acabamos de crear para consultar permisos
+      // Usar el endpoint
       const url = `${this.permissionsApiUrl}/permissions/operations?cedula=${cedula}`;
       this.logger.log(`[API DEBUG] Consultando permisos en URL: ${url}`);
 
@@ -169,7 +169,7 @@ export class PermissionCacheService {
   /**
    * Verifica si un usuario tiene permiso para una operación específica
    * @param cedula Cédula del usuario
-   * @param operacion Operación a verificar (SELECT, INSERT, UPDATE, DELETE)
+   * @param operacion Operación a verificar
    * @param token Token JWT del usuario
    * @returns true si tiene permiso, false en caso contrario
    */

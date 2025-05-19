@@ -1,13 +1,14 @@
+// src/sql-translator/services/response-formatter.service.ts
 import { Injectable } from '@nestjs/common';
 import { SqlToCqlResult } from '../interfaces/sql-to-cql.interface';
 
 @Injectable()
 export class ResponseFormatterService {
   /**
-   * Formatea la respuesta de una traducción SQL a CQL añadiendo mensajes personalizados
+   * Formatea la respuesta de una traducción SQL a CQL 
    * @param result Resultado de la traducción/ejecución
    * @param tipoOperacion Tipo de operación SQL/CQL
-   * @returns Resultado formateado con mensajes personalizados
+   * @returns Resultado formateado 
    */
   formatResponse(result: SqlToCqlResult, tipoOperacion: string | undefined): SqlToCqlResult {
     // Si la operación no fue exitosa, mantener el resultado original
@@ -19,14 +20,14 @@ export class ResponseFormatterService {
     const operationType = tipoOperacion || 'UNKNOWN';
     
     // Obtener nombre de la tabla o keyspace de la consulta CQL
-    const { tableName, keyspaceName } = this.extractNames(result.cql);
+    const { tableName, keyspaceName, indexName } = this.extractNames(result.cql);
     
     // Crear el objeto de consulta CQL para copiar y pegar
     const copyableCqlQuery = this.createCopyableCqlQuery(result.cql);
 
     // Si no hay resultados de ejecución, solo agregar mensaje basado en la traducción
     if (!result.executionResult) {
-      const message = this.getMessageForOperation(operationType, { tableName, keyspaceName });
+      const message = this.getMessageForOperation(operationType, { tableName, keyspaceName, indexName });
       return {
         ...result,
         message,
@@ -40,6 +41,7 @@ export class ResponseFormatterService {
       message: this.getMessageForOperation(operationType, { 
         tableName, 
         keyspaceName,
+        indexName,
         data: result.executionResult.data
       }),
       copyableCqlQuery
@@ -71,17 +73,18 @@ export class ResponseFormatterService {
   }
 
   /**
-   * Extrae nombres de tabla y keyspace de una consulta CQL
+   * Extrae nombres de tabla, keyspace e índice de una consulta CQL
    * @param cql Consulta CQL
-   * @returns Nombres de tabla y keyspace encontrados
+   * @returns Nombres de tabla, keyspace e índice encontrados
    */
-  private extractNames(cql: string | undefined): { tableName: string, keyspaceName: string } {
+  private extractNames(cql: string | undefined): { tableName: string, keyspaceName: string, indexName: string } {
     let tableName = '';
     let keyspaceName = '';
+    let indexName = '';
     
     // Si no hay CQL, retornar valores vacíos
     if (!cql) {
-      return { tableName, keyspaceName };
+      return { tableName, keyspaceName, indexName };
     }
     
     // Normalizar consulta para facilitar la extracción
@@ -112,31 +115,48 @@ export class ResponseFormatterService {
     
     // Extraer nombre de keyspace
     if (normalizedCql.includes(' KEYSPACE ')) {
-      const keyspaceMatch = cql.match(/KEYSPACE\s+([^\s(,;]+)/i);
+      const keyspaceMatch = cql.match(/KEYSPACE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([^\s(,;]+)/i);
       if (keyspaceMatch && keyspaceMatch[1]) {
         keyspaceName = keyspaceMatch[1].replace(/["`']/g, '');
       }
     }
     
-    return { tableName, keyspaceName };
+    // Extraer nombre de índice para DROP INDEX
+    if (normalizedCql.startsWith('DROP INDEX')) {
+      const indexMatch = cql.match(/DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s(,;]+)/i);
+      if (indexMatch && indexMatch[1]) {
+        indexName = indexMatch[1].replace(/["`']/g, '');
+      }
+    }
+    // Extraer nombre de índice para CREATE INDEX
+    else if (normalizedCql.startsWith('CREATE INDEX')) {
+      const indexMatch = cql.match(/CREATE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(,;]+)/i);
+      if (indexMatch && indexMatch[1]) {
+        indexName = indexMatch[1].replace(/["`']/g, '');
+      }
+    }
+    
+    return { tableName, keyspaceName, indexName };
   }
 
   /**
    * Obtiene un mensaje personalizado según el tipo de operación
    * @param tipoOperacion Tipo de operación SQL/CQL
-   * @param params Parámetros adicionales (nombres de tabla/keyspace, datos)
+   * @param params Parámetros adicionales (nombres de tabla/keyspace/índice, datos)
    * @returns Mensaje personalizado
    */
   private getMessageForOperation(tipoOperacion: string, params: { 
     tableName?: string, 
     keyspaceName?: string,
+    indexName?: string,
     data?: any
   }): string {
-    const { tableName, keyspaceName, data } = params;
+    const { tableName, keyspaceName, indexName, data } = params;
     
     // Normalizar valores para evitar undefined
     const table = tableName || 'desconocida';
     const keyspace = keyspaceName || 'desconocida';
+    const index = indexName || 'desconocido';
     
     switch (tipoOperacion) {
       case 'CREATE KEYSPACE':
@@ -164,9 +184,9 @@ export class ResponseFormatterService {
       case 'DESCRIBE TABLE':
         return `Estructura de la tabla ${table}`;
       case 'CREATE INDEX':
-        return `Índice creado correctamente`;
+        return `Índice ${index} creado correctamente`;
       case 'DROP INDEX':
-        return `Índice eliminado correctamente`;
+        return `Índice ${index} eliminado correctamente`;
       case 'INSERT':
         return `Datos insertados correctamente en la tabla ${table}`;
       case 'UPDATE':

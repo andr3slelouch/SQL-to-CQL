@@ -95,11 +95,7 @@ export class ViewTranslator implements Translator {
       return this.createErrorComment('No se encontró una tabla base válida para la vista');
     }
     
-    // En Cassandra, una vista materializada requiere:
-    // 1. Una tabla base
-    // 2. Todas las columnas de la clave primaria de la tabla base
-    // 3. Una nueva clave primaria para la vista
-    // 4. Una cláusula WHERE que no incluya columnas de la clave primaria
+  
     
     const columns = this.extractColumns(selectAst);
     const whereClause = selectAst.where ? this.formatWhereExpression(selectAst.where) : 'status is not null';
