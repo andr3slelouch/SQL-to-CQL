@@ -1,4 +1,3 @@
-// src/services/AuthService.ts
 import KeyspaceService from './KeyspaceService';
 
 export interface User {
@@ -14,35 +13,46 @@ export interface AuthState {
 }
 
 class AuthService {
-  // Guarda los datos de autenticación
+  // Guarda los datos de autenticación siempre en sessionStorage
   saveAuthData(token: string, user: User, expiresIn: number): void {
-    localStorage.setItem('accessToken', token);
-    localStorage.setItem('userData', JSON.stringify(user));
-    
+    sessionStorage.setItem('accessToken', token);
+    sessionStorage.setItem('userData', JSON.stringify(user));
     const expirationTime = new Date().getTime() + expiresIn * 1000;
-    localStorage.setItem('tokenExpiration', expirationTime.toString());
+    sessionStorage.setItem('tokenExpiration', expirationTime.toString());
+    
+    // Marcar cada pestaña con un identificador único para debugging
+    if (!sessionStorage.getItem('tabIdentifier')) {
+      sessionStorage.setItem('tabIdentifier', Date.now().toString());
+    }
     
     // Configurar temporizador para refrescar o cerrar sesión antes de que expire
     this.setupTokenRefresh(expiresIn);
+    
+    console.log('Datos de autenticación guardados en sessionStorage');
   }
   
   // Limpia los datos de autenticación y redirige al login
-  logout(): void {
+  logout(redirectToLogin: boolean = true): void {
+    console.log('Cerrando sesión');
+    
     // Limpiar tokens y datos de usuario
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('userData');
-    localStorage.removeItem('tokenExpiration');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('userData');
+    sessionStorage.removeItem('tokenExpiration');
+    sessionStorage.removeItem('tabIdentifier');
     
     // IMPORTANTE: Limpiar también el caché de keyspaces
     KeyspaceService.clearCache();
     
-    // Opcional: redirigir al login
-    window.location.href = '/';
+    // Redirigir al login si se solicita
+    if (redirectToLogin) {
+      window.location.href = '/';
+    }
   }
   
   // Obtiene el token de acceso
   getToken(): string | null {
-    return localStorage.getItem('accessToken');
+    return sessionStorage.getItem('accessToken');
   }
   
   // Alias para getToken (para compatibilidad con AuthApiService)
@@ -52,40 +62,37 @@ class AuthService {
   
   // Obtiene el usuario actual
   getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('userData');
+    const userStr = sessionStorage.getItem('userData');
     if (!userStr) return null;
-    
     try {
       return JSON.parse(userStr) as User;
     } catch (error) {
-      this.logout();
+      console.error('Error al parsear datos de usuario:', error);
+      this.logout(false);
       return null;
     }
   }
   
   // Verifica si el token ha expirado
   isTokenExpired(): boolean {
-    const expiration = localStorage.getItem('tokenExpiration');
+    const expiration = sessionStorage.getItem('tokenExpiration');
     if (!expiration) return true;
-    
     const expirationTime = parseInt(expiration);
     return new Date().getTime() > expirationTime;
   }
-
+  
   // Verifica si el usuario está autenticado
   isAuthenticated(): boolean {
     const token = this.getToken();
     if (!token) return false;
-    
     return !this.isTokenExpired();
   }
-
+  
   // Obtiene el estado de autenticación actual
   getAuthState(): AuthState {
     const isAuthenticated = this.isAuthenticated();
     const user = this.getCurrentUser();
     const accessToken = this.getToken();
-    
     return {
       isAuthenticated,
       user,
@@ -97,7 +104,6 @@ class AuthService {
   setupTokenRefresh(expiresIn: number): void {
     // Configuramos el tiempo de refresco a 1 minuto antes de que expire el token
     const refreshTime = (expiresIn - 60) * 1000;
-    
     if (refreshTime <= 0) {
       // Si el tiempo ya pasó, simplemente cerramos sesión
       this.logout();
@@ -105,7 +111,6 @@ class AuthService {
     }
     
     setTimeout(() => {
-      
       if (this.isAuthenticated()) {
         alert('Su sesión está por expirar. Por favor, vuelva a iniciar sesión.');
         this.logout();
@@ -114,4 +119,6 @@ class AuthService {
   }
 }
 
-export default new AuthService();
+// Crear instancia y exportar
+const authServiceInstance = new AuthService();
+export default authServiceInstance;

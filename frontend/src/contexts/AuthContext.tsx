@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import AuthService, { User, AuthState } from '../services/AuthService';
 
@@ -34,34 +33,26 @@ const DEBUG_LOGS = false;
 const areEqual = (obj1: any, obj2: any): boolean => {
   // Si son idénticos por referencia
   if (obj1 === obj2) return true;
-  
   // Si alguno es null/undefined pero el otro no
   if (obj1 == null || obj2 == null) return obj1 === obj2;
-  
   // Si son tipos primitivos diferentes
   if (typeof obj1 !== typeof obj2) return false;
-  
   // Comparar valores primitivos
   if (typeof obj1 !== 'object') return obj1 === obj2;
-  
   // Si uno es array y el otro no
   const isArray1 = Array.isArray(obj1);
   const isArray2 = Array.isArray(obj2);
   if (isArray1 !== isArray2) return false;
-  
   // Si ambos son arrays, comparar longitud y elementos
   if (isArray1) {
     if (obj1.length !== obj2.length) return false;
     return obj1.every((item: any, index: number) => areEqual(item, obj2[index]));
   }
-  
   // Para objetos, comparamos sus propiedades
   const keys1 = Object.keys(obj1);
   const keys2 = Object.keys(obj2);
-  
   if (keys1.length !== keys2.length) return false;
-  
-  return keys1.every(key => 
+  return keys1.every(key =>
     Object.prototype.hasOwnProperty.call(obj2, key) && areEqual(obj1[key], obj2[key])
   );
 };
@@ -86,16 +77,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     accessToken: null,
     loading: true
   });
-  
+
   // Referencia para mantener el último estado sin trigger re-renderizados
   const lastAuthStateRef = useRef<(AuthState & { loading: boolean }) | null>(null);
-  
+
   // Contador de renderizados para debug
   const renderCount = useRef(0);
   renderCount.current++;
-  
+
   // Log de renderizados
-  logDebug(`🔒 AuthContext renderizado #${renderCount.current}`);
+  logDebug(` AuthContext renderizado #${renderCount.current}`);
 
   /**
    * Verificar el estado de autenticación y actualizar solo si hay cambios
@@ -106,12 +97,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ...currentState,
       loading: false
     };
-    
+
     // Verificar si el estado ha cambiado realmente
     const hasChanged = !lastAuthStateRef.current || !areEqual(lastAuthStateRef.current, newState);
     
     if (hasChanged) {
-      logDebug('🔄 AuthContext: Estado de autenticación ha cambiado, actualizando...', {
+      logDebug(' AuthContext: Estado de autenticación ha cambiado, actualizando...', {
         prevState: lastAuthStateRef.current,
         newState
       });
@@ -122,7 +113,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Actualizar el estado solo si hay cambios reales
       setAuthState(newState);
     } else {
-      logDebug('✓ AuthContext: Estado de autenticación sin cambios, evitando re-renderizado');
+      logDebug('✓ AuthContext: Estado de autenticación sin cambios, evitando rerenderizado');
     }
     
     return hasChanged;
@@ -130,20 +121,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Efecto para verificar el estado de autenticación al cargar la aplicación
   useEffect(() => {
-    logDebug('🔒 AuthContext: Iniciando verificación de autenticación');
+    logDebug(' AuthContext: Iniciando verificación de autenticación');
     
     // Verificación inicial
     checkAuthState();
-
+    
     // Intervalo para verificaciones periódicas
     // Consideramos 60 segundos un buen balance entre seguridad y rendimiento
     const intervalId = setInterval(() => {
-      logDebug('⏰ AuthContext: Verificación periódica de autenticación');
+      logDebug(' AuthContext: Verificación periódica de autenticación');
       checkAuthState();
     }, 60000); // Cada minuto
-
+    
     return () => {
-      logDebug('🔒 AuthContext: Limpiando intervalo de verificación');
+      logDebug(' AuthContext: Limpiando intervalos');
       clearInterval(intervalId);
     };
   }, [checkAuthState]);
@@ -153,10 +144,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Memoizada para evitar recrearla en cada renderizado
    */
   const logout = useCallback(() => {
-    logDebug('🚪 AuthContext: Cerrando sesión');
-    
+    logDebug(' AuthContext: Cerrando sesión');
     AuthService.logout();
-    
     const newState = {
       isAuthenticated: false,
       user: null,

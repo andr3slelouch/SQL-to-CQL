@@ -1,43 +1,14 @@
 // src/components/TranslatorPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaArrowsAltH, FaSignOutAlt, FaUserCircle, FaCopy, FaPlay, FaSpinner } from 'react-icons/fa';
+import { FaArrowsAltH, FaSignOutAlt, FaUserCircle, FaCopy, FaPlay, FaSpinner, FaDownload } from 'react-icons/fa';
 import KeyspaceService from '../services/KeyspaceService';
 import AuthService from '../services/AuthService';
-import HttpService from '../services/HttpService';
+import TranslatorService, { ExecuteResponse } from '../services/TranslatorService';
 import '../styles/TranslatorPage.css';
 
-// Definir interfaces para las respuestas del API
-interface ExecuteResponse {
-  success: boolean;
-  cql?: string;
-  translatedQuery?: string;
-  copyableCqlQuery?: {
-    query: string;
-    description: string;
-  };
-  message?: string;
-  data?: any[];
-  metadata?: {
-    columns: string[];
-  };
-  executionResult?: {
-    success: boolean;
-    data: {
-      info?: any;
-      rows: any[];
-      rowLength: number;
-      columns: {
-        name: string;
-        type: {
-          code: number;
-          type: any;
-        };
-      }[];
-      pageState: any;
-    };
-  };
-}
+// Modal types
+type ModalType = 'dropDatabaseWarning' | null;
 
 const TranslatorPage: React.FC = () => {
   const navigate = useNavigate();
@@ -54,12 +25,33 @@ const TranslatorPage: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Rastrea el keyspace actual en lugar de usar un Set
+  // Rastrea el keyspace actual
   const [currentKeyspace, setCurrentKeyspace] = useState<string>('');
 
-  // Cargar las bases de datos (keyspaces) del backend sin bloquear la interfaz
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<ModalType>(null);
+
+  // Show modal helper function
+  const showModal = (type: ModalType) => {
+    setModalType(type);
+    setModalOpen(true);
+  };
+
+  // Close modal helper function
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalType(null);
+  };
+
+  // Función para detectar si la consulta SQL es una sentencia DROP DATABASE
+  const isDropDatabaseQuery = (query: string): boolean => {
+    const trimmedQuery = query.trim().toLowerCase();
+    return trimmedQuery.includes('drop') && trimmedQuery.includes('database');
+  };
+
+  // Cargar las bases de datos (keyspaces) del backend
   useEffect(() => {
-    // Esta función se ejecutará de manera asíncrona sin bloquear el renderizado
     const fetchDatabases = async () => {
       try {
         // Verificar si el usuario actual cambió
@@ -71,17 +63,14 @@ const TranslatorPage: React.FC = () => {
           KeyspaceService.clearCache();
         }
         
-        // Obtener keyspaces del usuario desde el backend
         const keyspaces = await KeyspaceService.getUserKeyspaces();
         console.log("Keyspaces obtenidos:", keyspaces);
         setDatabases(keyspaces);
         
-        // Si hay keyspaces disponibles, seleccionar el primero por defecto
         if (keyspaces.length > 0) {
           const defaultKeyspace = keyspaces[0];
           setSelectedDatabase(defaultKeyspace);
-          setCurrentKeyspace(defaultKeyspace); // Establecer el keyspace actual
-          // Enviar USE para el keyspace inicial
+          setCurrentKeyspace(defaultKeyspace);
           await sendUseCommand(defaultKeyspace);
         }
       } catch (error) {
@@ -93,7 +82,6 @@ const TranslatorPage: React.FC = () => {
       }
     };
 
-    // Iniciamos la carga de manera no bloqueante
     fetchDatabases();
   }, []);
 
@@ -125,132 +113,98 @@ const TranslatorPage: React.FC = () => {
   const handleDatabaseChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const keyspace = e.target.value;
     setSelectedDatabase(keyspace);
-    
-    // Limpiar las tablas mientras se cargan las nuevas
     setTables([]);
-    
-    // SIEMPRE enviar el comando USE cuando se selecciona un keyspace diferente
     if (keyspace && keyspace !== currentKeyspace) {
       await sendUseCommand(keyspace);
-      // Actualizar el keyspace actual
       setCurrentKeyspace(keyspace);
     }
   };
 
   // Función para enviar comando USE al backend
   const sendUseCommand = async (keyspace: string) => {
-  if (!keyspace) return;
-  
-  setIsExecuting(true);
-  setError(null);
-  
-  try {
-    // Normalizar el keyspace a minúsculas
-    const normalizedKeyspace = keyspace.toLowerCase();
-    
-    // Crear el comando USE
-    const useCommand = `USE ${normalizedKeyspace};`;
-    
-    console.log(`Enviando comando USE para keyspace: ${normalizedKeyspace}`);
-    
-    // Enviar el comando al backend
-    const response = await HttpService.post<ExecuteResponse>(
-      '/translator/execute',
-      { sql: useCommand },
-      { service: 'translator' }
-    );
-    
-    if (response && response.success) {
-      // Priorizar el campo copyableCqlQuery.query para mostrar en el campo CQL
-      if (response.copyableCqlQuery && response.copyableCqlQuery.query) {
-        setCqlQuery(response.copyableCqlQuery.query);
-      } else if (response.cql) {
-        setCqlQuery(response.cql);
-      } else if (response.translatedQuery) {
-        setCqlQuery(response.translatedQuery);
-      }
-      
-      // Mostrar mensaje de éxito en la sección de resultados
-      const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
-      setResults([{ mensaje }]);
-      setColumns(['mensaje']);
-      
-      console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
-    } else {
-      const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
-      setError(errorMsg);
-      setResults([{ mensaje: errorMsg }]);
-      setColumns(['mensaje']);
-    }
-  } catch (error: any) {
-    console.error('Error al ejecutar USE:', error);
-    const errorMsg = `Error al seleccionar la base de datos ${keyspace}: ${error.message}`;
-    setError(errorMsg);
-    setResults([{ mensaje: errorMsg }]);
-    setColumns(['mensaje']);
-  } finally {
-    setIsExecuting(false);
-  }
-};
-
-  // Función para ejecutar la consulta SQL (ahora también maneja la traducción)
-  const handleExecute = async () => {
-    if (!sqlQuery.trim()) return;
+    if (!keyspace) return;
     
     setIsExecuting(true);
     setError(null);
     
     try {
-      // Ejecutamos la consulta directamente - el backend se encarga de traducir y ejecutar
-      const response = await HttpService.post<ExecuteResponse>(
-        '/translator/execute', 
-        { sql: sqlQuery },
-        { service: 'translator' }
-      );
+      const normalizedKeyspace = keyspace.toLowerCase();
+      const useCommand = `USE ${normalizedKeyspace};`;
       
-      if (response) {
-        // Actualizar el campo CQL con el valor de copyableCqlQuery.query si existe
+      console.log(`Enviando comando USE para keyspace: ${normalizedKeyspace}`);
+      
+      const response = await TranslatorService.executeQuery(useCommand);
+      
+      if (response && response.success) {
+        // Actualizar CQL
         if (response.copyableCqlQuery && response.copyableCqlQuery.query) {
           setCqlQuery(response.copyableCqlQuery.query);
         } else if (response.cql) {
-          // Si no hay copyableCqlQuery, usar el campo cql
           setCqlQuery(response.cql);
         } else if (response.translatedQuery) {
-          // Si tampoco hay cql, usar translatedQuery como fallback
           setCqlQuery(response.translatedQuery);
         }
         
-        // Procesar la respuesta según su estructura
+        // Mostrar mensaje (ya mejorado por el servicio)
+        const mensaje = response.message || `Base de datos ${keyspace} seleccionada correctamente.`;
+        setResults([{ mensaje }]);
+        setColumns(['mensaje']);
+        
+        console.log(`Comando USE ejecutado exitosamente para ${keyspace}`);
+      } else {
+        const errorMsg = response?.message || `Error al seleccionar la base de datos ${keyspace}.`;
+        setError(errorMsg);
+        setResults([{ mensaje: errorMsg }]);
+        setColumns(['mensaje']);
+      }
+    } catch (error: any) {
+      console.error('Error al ejecutar USE:', error);
+      const errorMsg = `Error al seleccionar la base de datos ${keyspace}: ${error.message}`;
+      setError(errorMsg);
+      setResults([{ mensaje: errorMsg }]);
+      setColumns(['mensaje']);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  // Función para ejecutar la consulta SQL
+  const executeQuery = async (query: string) => {
+    setIsExecuting(true);
+    setError(null);
+    
+    try {
+      const response = await TranslatorService.executeQuery(query);
+      
+      if (response) {
+        // Actualizar CQL
+        if (response.copyableCqlQuery && response.copyableCqlQuery.query) {
+          setCqlQuery(response.copyableCqlQuery.query);
+        } else if (response.cql) {
+          setCqlQuery(response.cql);
+        } else if (response.translatedQuery) {
+          setCqlQuery(response.translatedQuery);
+        }
+        
+        // Procesar respuesta
         if (response.success) {
-          // Verificar si hay datos en executionResult
           if (response.executionResult && response.executionResult.data && response.executionResult.data.rows) {
-            // Es un resultado de tipo SELECT con datos
+            // Datos de SELECT
             setResults(response.executionResult.data.rows);
-            
-            // Extraer los nombres de las columnas
             if (response.executionResult.data.columns) {
               const columnNames = response.executionResult.data.columns.map(col => col.name);
               setColumns(columnNames);
-            } else {
-              // Si no hay definición de columnas, extraer las claves del primer objeto
-              if (response.executionResult.data.rows.length > 0) {
-                setColumns(Object.keys(response.executionResult.data.rows[0]));
-              }
+            } else if (response.executionResult.data.rows.length > 0) {
+              setColumns(Object.keys(response.executionResult.data.rows[0]));
             }
           } else {
-            // Es una operación sin datos (INSERT, UPDATE, etc.)
-            // Mostrar el mensaje proporcionado por el backend
-            if (response.message) {
-              setResults([{ mensaje: response.message }]);
-              setColumns(['mensaje']);
-            } else {
-              // Si por alguna razón no hay mensaje, mostrar uno genérico
-              setResults([{ mensaje: 'Operación ejecutada correctamente.' }]);
-              setColumns(['mensaje']);
-            }
+            // Operación sin datos (mensaje ya mejorado por el servicio)
+            const mensaje = response.message || 'Operación ejecutada correctamente.';
+            setResults([{ mensaje }]);
+            setColumns(['mensaje']);
           }
         } else {
-          // La operación falló
+          // Error (mensaje ya mejorado por el servicio)
           const mensajeError = response.message || 'Error al ejecutar la consulta.';
           setError(mensajeError);
           setResults([{ mensaje: mensajeError }]);
@@ -273,6 +227,91 @@ const TranslatorPage: React.FC = () => {
     }
   };
 
+  // Función principal para manejar la ejecución
+  const handleExecute = async () => {
+    if (!sqlQuery.trim()) return;
+
+    if (isDropDatabaseQuery(sqlQuery)) {
+      showModal('dropDatabaseWarning');
+      return;
+    }
+
+    await executeQuery(sqlQuery);
+  };
+
+  // Handle warning modal accept
+  const handleWarningAccept = () => {
+    closeModal();
+  };
+
+  // Función para descargar resultados como CSV
+  const downloadCSV = () => {
+    if (results.length === 0 || columns.length === 0) return;
+
+    const csvContent = [
+      columns.join(','),
+      ...results.map(row =>
+        columns.map(column => {
+          const value = row[column];
+          if (value === null || value === undefined) return '';
+          const stringValue = String(value);
+          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+          }
+          return stringValue;
+        }).join(',')
+      )
+    ].join('\n');
+
+    let fileName = 'resultados';
+    if (selectedDatabase) {
+      const tableName = extractTableNameFromQuery(sqlQuery);
+      if (tableName) {
+        fileName = `resultados_${selectedDatabase}.${tableName}`;
+      } else {
+        fileName = `resultados_${selectedDatabase}`;
+      }
+    } else {
+      fileName = `resultados_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${fileName}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Función para extraer el nombre de la tabla del query SQL
+  const extractTableNameFromQuery = (query: string): string | null => {
+    if (!query) return null;
+    
+    const trimmedQuery = query.trim().toLowerCase();
+    
+    const selectFromMatch = trimmedQuery.match(/select\s+.*?\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (selectFromMatch) return selectFromMatch[1];
+    
+    const insertMatch = trimmedQuery.match(/insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (insertMatch) return insertMatch[1];
+    
+    const updateMatch = trimmedQuery.match(/update\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (updateMatch) return updateMatch[1];
+    
+    const deleteMatch = trimmedQuery.match(/delete\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (deleteMatch) return deleteMatch[1];
+    
+    return null;
+  };
+
+  // Función para verificar si los resultados son descargables
+  const isDataDownloadable = () => {
+    return results.length > 0 && columns.length > 0 && !columns.includes('mensaje');
+  };
+
   const handleLogout = () => {
     AuthService.logout();
     navigate('/login');
@@ -281,7 +320,6 @@ const TranslatorPage: React.FC = () => {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(cqlQuery);
     setShowTooltip(true);
-    // Ocultar el tooltip después de 2 segundos
     setTimeout(() => {
       setShowTooltip(false);
     }, 2000);
@@ -289,6 +327,29 @@ const TranslatorPage: React.FC = () => {
 
   return (
     <div className="translator-container">
+      {/* Modal component */}
+      {modalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            {modalType === 'dropDatabaseWarning' && (
+              <>
+                <p className="modal-message">
+                  El comando que intenta ejecutar es crítico. Si desea eliminar una base de datos comuníquese con un administrador.
+                </p>
+                <div className="modal-buttons">
+                  <button
+                    className="modal-button aceptar-button"
+                    onClick={handleWarningAccept}
+                  >
+                    Aceptar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sidebar izquierdo */}
       <div className="sidebar">
         <div className="logo">CASSQL</div>
@@ -320,14 +381,12 @@ const TranslatorPage: React.FC = () => {
             
             <div className="database-selector">
               <div className="select-container">
-                {/* Indicador de carga para el selector de bases de datos */}
                 {isLoadingDatabases ? (
                   <div className="loading-indicator">
                     <FaSpinner className="spinner-icon" />
                     <span>Cargando bases de datos...</span>
                   </div>
                 ) : (
-                  /* Select funcional que envía USE la primera vez */
                   <select
                     id="database-select"
                     name="database-select"
@@ -413,7 +472,14 @@ const TranslatorPage: React.FC = () => {
 
           {/* Sección de resultados */}
           <div className="results-section">
-            <h3>Resultado</h3>
+            <div className="results-header">
+              <h3>Resultado</h3>
+              {isDataDownloadable() && (
+                <button className="download-button" onClick={downloadCSV} title="Descargar CSV">
+                  <FaDownload />
+                </button>
+              )}
+            </div>
             <div className="results-table">
               {results.length > 0 ? (
                 <table>

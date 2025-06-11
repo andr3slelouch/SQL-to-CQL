@@ -1,0 +1,315 @@
+/* src/styles/DeleteKeyspacePage.css */
+
+/* Container styles */
+.delete-keyspace-container {
+  padding: 2rem;
+}
+
+/* Search section styles */
+.search-section {
+  margin-bottom: 2rem;
+}
+
+.search-input-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-button {
+  min-width: auto !important;
+  padding: 0.8rem !important;
+  background-color: white;
+  border: 1px solid #ddd;
+  color: #333;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-button:hover:not(:disabled) {
+  background-color: #000000;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.search-button:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Loading animation */
+.loading-icon svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Keyspace info section */
+.keyspace-info-section {
+  margin-bottom: 2rem;
+}
+
+/* Users list section */
+.users-list-section {
+  margin-bottom: 2rem;
+}
+
+.users-list {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem;
+  margin-bottom: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.user-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-item:last-child {
+  margin-bottom: 0;
+}
+
+.user-name {
+  font-weight: bold;
+  flex: 1;
+}
+
+.user-cedula {
+  color: #ccc;
+  margin: 0 1rem;
+  font-style: italic;
+}
+
+.user-role {
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.user-role.admin {
+  background-color: #28a745;
+  color: white;
+}
+
+.user-role.regular {
+  background-color: #6c757d;
+  color: white;
+}
+
+/* Delete button styles */
+.button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.delete-button:hover:not(:disabled) {
+  background-color: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+.delete-button:disabled {
+  background-color: #cccccc;
+  color: #666666;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Modal styles - reutilizando los mismos del DeleteUserPage */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: #495057;
+  border-radius: 15px;
+  width: 500px;
+  max-width: 90vw;
+  padding: 2rem;
+  color: white;
+  text-align: center;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-message {
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+  text-align: left;
+  color: white;
+  line-height: 1.5;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.modal-button {
+  background-color: white;
+  color: #333;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  min-width: 100px;
+  transition: all 0.3s ease;
+}
+
+.modal-button:hover {
+  background-color: #1797DC;
+  color: white;
+}
+
+.si-button, .no-button, .aceptar-button {
+  min-width: 100px;
+}
+
+.aceptar-button {
+  min-width: 150px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Instruction message */
+.keyspace-instruction-message {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .admin-form-row {
+    flex-direction: column;
+  }
+
+  .admin-form-column {
+    width: 100%;
+  }
+
+  .modal-container {
+    margin: 1rem;
+    min-width: auto;
+    width: calc(100% - 2rem);
+  }
+
+  .search-input-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .user-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .user-cedula {
+    margin: 0;
+  }
+
+  .users-list {
+    max-height: 150px;
+  }
+}
+
+/* Input placeholders */
+.admin-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* Ensure input fields maintain consistent height */
+.admin-input {
+  min-height: 45px;
+}
+
+/* Scrollbar for users list */
+.users-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.users-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.users-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.users-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}

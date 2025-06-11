@@ -12,6 +12,37 @@ export interface TranslationResponse {
   error?: string;
 }
 
+export interface ExecuteResponse {
+  success: boolean;
+  cql?: string;
+  translatedQuery?: string;
+  copyableCqlQuery?: {
+    query: string;
+    description: string;
+  };
+  message?: string;
+  data?: any[];
+  metadata?: {
+    columns: string[];
+  };
+  executionResult?: {
+    success: boolean;
+    data: {
+      info?: any;
+      rows: any[];
+      rowLength: number;
+      columns: {
+        name: string;
+        type: {
+          code: number;
+          type: any;
+        };
+      }[];
+      pageState: any;
+    };
+  };
+}
+
 class TranslatorService {
   /**
    * Normaliza el nombre del keyspace a minúsculas
@@ -20,6 +51,60 @@ class TranslatorService {
    */
   private normalizeKeyspaceName(keyspace: string): string {
     return keyspace ? keyspace.toLowerCase() : '';
+  }
+
+  /**
+   * Mejora los mensajes de respuesta agregando información útil
+   * @param message Mensaje original del backend
+   * @param query Consulta SQL ejecutada
+   * @returns Mensaje mejorado
+   */
+  private enhanceResponseMessage(message: string, query: string): string {
+    if (!message || !query) return message;
+
+    const trimmedQuery = query.trim().toLowerCase();
+    let enhancedMessage = message;
+
+    // Detectar CREATE DATABASE
+    if (trimmedQuery.includes('create') && trimmedQuery.includes('database')) {
+      enhancedMessage += ' Para observar la base creada recargue la página.';
+    }
+    
+    // Detectar CREATE TABLE
+    else if (trimmedQuery.includes('create') && trimmedQuery.includes('table')) {
+      enhancedMessage += ' Para observar la tabla creada recargue la página.';
+    }
+
+    // Detectar mensajes de ALLOW FILTERING
+    if (message.toLowerCase().includes('allow filtering') || 
+        message.toLowerCase().includes('allowfiltering')) {
+      enhancedMessage += ' Se recomienda crear un índice a la columna.';
+    }
+
+    // Detectar consultas WHERE que devuelven 0 registros
+    if (message.toLowerCase().includes('se encontraron 0 registros') && 
+        trimmedQuery.includes('where')) {
+      enhancedMessage += ' Se sugiere crear un índice a la columna.';
+    }
+
+    return enhancedMessage;
+  }
+
+  /**
+   * Mejora una respuesta del backend aplicando las mejoras de mensajes
+   * @param response Respuesta original del backend
+   * @param query Consulta SQL ejecutada
+   * @returns Respuesta con mensajes mejorados
+   */
+  private enhanceExecuteResponse(response: ExecuteResponse, query: string): ExecuteResponse {
+    const enhancedResponse = { ...response };
+
+    // Mejorar el mensaje principal si existe
+    if (enhancedResponse.message) {
+      enhancedResponse.message = this.enhanceResponseMessage(enhancedResponse.message, query);
+    }
+
+    return enhancedResponse;
   }
 
   /**
@@ -54,12 +139,45 @@ class TranslatorService {
   }
 
   /**
-   * Ejecuta una consulta CQL y devuelve los resultados
+   * Ejecuta una consulta SQL (traducida a CQL) y devuelve los resultados mejorados
+   * @param sql Consulta SQL a ejecutar
+   * @returns Resultado de la ejecución con mensajes mejorados
+   */
+  async executeQuery(sql: string): Promise<ExecuteResponse> {
+    try {
+      if (!sql.trim()) {
+        throw new Error('Se requiere una consulta SQL');
+      }
+
+      const response = await HttpService.post<ExecuteResponse>(
+        '/translator/execute',
+        { sql },
+        { service: 'translator' }
+      );
+
+      // Aplicar mejoras a los mensajes antes de devolver la respuesta
+      return this.enhanceExecuteResponse(response, sql);
+    } catch (error) {
+      console.error('Error al ejecutar la consulta:', error);
+      
+      // Crear respuesta de error mejorada
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido al ejecutar la consulta';
+      const enhancedErrorMessage = this.enhanceResponseMessage(errorMessage, sql);
+      
+      return {
+        success: false,
+        message: enhancedErrorMessage
+      };
+    }
+  }
+
+  /**
+   * Ejecuta una consulta CQL directa y devuelve los resultados
    * @param cql Consulta CQL a ejecutar
    * @param keyspace Keyspace seleccionado
    * @returns Resultados de la consulta
    */
-  async executeQuery(cql: string, keyspace: string): Promise<any[]> {
+  async executeCqlQuery(cql: string, keyspace: string): Promise<any[]> {
     try {
       if (!cql.trim() || !keyspace) {
         throw new Error('Se requiere una consulta CQL y un keyspace seleccionado');
@@ -75,7 +193,7 @@ class TranslatorService {
       
       return response.results || [];
     } catch (error) {
-      console.error('Error al ejecutar la consulta:', error);
+      console.error('Error al ejecutar la consulta CQL:', error);
       throw error;
     }
   }

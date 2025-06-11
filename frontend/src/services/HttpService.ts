@@ -38,23 +38,24 @@ class HttpService {
     
     // Construir la URL correcta para el servicio
     const url = `${this.baseUrls[service]}${endpoint}`;
+    
     console.log(`Servicio seleccionado: ${service}`);
     console.log(`URL completa: ${url}`);
-    
+
     // Configurar encabezados predeterminados
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.getAuthHeaders(),
       ...(options.headers || {})
     };
-    
+
     // Preparar el cuerpo de la solicitud si existe
     let body;
     if (options.body) {
       body = JSON.stringify(options.body);
       console.log('Cuerpo de la petición:', options.body);
     }
-    
+
     // Configurar opciones de la solicitud
     const requestOptions: RequestInit = {
       method: options.method || 'GET',
@@ -62,11 +63,11 @@ class HttpService {
       body,
       credentials: 'include' // Para soportar cookies si se utilizan
     };
-    
+
     try {
       console.log(`Realizando petición a: ${url}`);
       const response = await fetch(url, requestOptions);
-      
+
       // Manejar errores de respuesta HTTP
       if (!response.ok) {
         if (response.status === 401) {
@@ -75,22 +76,21 @@ class HttpService {
           AuthService.logout();
           throw new Error('Su sesión ha expirado. Por favor, inicie sesión nuevamente.');
         }
-        
+
         // Manejar el conflicto de cédula duplicada específicamente
         if (response.status === 409) {
           console.error('Error 409: Conflicto - Recurso duplicado');
           const errorData = await response.json().catch(() => null);
           throw new Error('No se puede crear el usuario con la información ingresada');
         }
-        
+
         // Intentar obtener detalles del error desde la respuesta
         const errorData = await response.json().catch(() => null);
         console.error('Error en la respuesta:', errorData);
-        
         const errorMessage = errorData?.message || `Error ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
-      
+
       // Verificar si la respuesta contiene datos JSON
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -98,11 +98,12 @@ class HttpService {
         console.log('Respuesta JSON:', jsonResponse);
         return jsonResponse as T;
       }
-      
+
       // Si no es JSON, devolver la respuesta como texto
       const textResponse = await response.text();
       console.log('Respuesta texto:', textResponse);
       return textResponse as unknown as T;
+
     } catch (error) {
       // Re-lanzar el error para que lo maneje el componente
       throw error;
@@ -124,6 +125,11 @@ class HttpService {
 
   async delete<T>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE', ...options });
+  }
+
+  // Método específico para PATCH si lo necesitas
+  async patch<T>(endpoint: string, body: any, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<T> {
+    return this.request<T>(endpoint, { method: 'PATCH', body, ...options });
   }
 }
 

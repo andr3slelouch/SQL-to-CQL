@@ -3,228 +3,350 @@
 
 /* Estilos específicos para el traductor administrativo */
 .translator-panel {
-    margin-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.results-panel {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Estilos para editores de consulta */
+.query-editors {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.editor-container {
+  flex: 1;
+  max-width: 48%;
+}
+
+.editor-container h3 {
+  margin-bottom: 0.8rem;
+  color: white;
+  font-size: 1.6rem;
+  font-weight: normal;
+}
+
+.query-editor {
+  width: 100%;
+  height: 180px;
+  padding: 1rem;
+  border: none;
+  border-radius: 5px;
+  resize: none;
+  background-color: white;
+  font-family: monospace;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+/* Estilos para el contenedor CQL y botón de copia */
+.cql-container {
+  position: relative;
+}
+
+.copy-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: #4e5359;
+  cursor: pointer;
+  font-size: 1.5rem;
+  z-index: 10;
+}
+
+.copy-button:hover {
+  color: #000;
+}
+
+.copy-button:disabled {
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.copy-tooltip {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  background-color: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.copy-tooltip.show {
+  opacity: 1;
+}
+
+/* Estilos para el botón ejecutar */
+.execute-button-container {
+  display: flex;
+  justify-content: center;
+}
+
+.execute-button {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 180px;
+  padding: 0.8rem 2rem !important;
+}
+
+.execute-icon {
+  margin-left: 0.8rem;
+}
+
+/* Estilos para el selector de base de datos */
+.database-selector {
+  margin-bottom: 1.5rem;
+}
+
+.select-container {
+  margin-bottom: 1rem;
+}
+
+/* Estilo para el campo de solo lectura que parece un select */
+.readonly-select {
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 1.2rem;
+  background-color: white;
+  color: #333;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readonly-select .placeholder {
+  color: #999;
+}
+
+/* Estilos para el header de resultados con botón de descarga */
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.download-button {
+  background-color: white;
+  color: #333;
+  border: none;
+  padding: 0.6rem 0.8rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.download-button:hover {
+  background-color: #1797DC;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 151, 220, 0.3);
+}
+
+.download-button:active {
+  transform: translateY(0);
+}
+.results-table {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 0.8rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #7d7d7d;
+  font-size: 1.1rem;
+  color: white;
+}
+
+th {
+  background-color: #3c4045;
+  color: white;
+  font-weight: normal;
+}
+
+tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Mensajes de error */
+.error-message {
+  background-color: rgba(255, 59, 48, 0.15);
+  border-left: 4px solid #ff3b30;
+  color: #ff8080;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1.2rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Estilos para el área sin resultados */
+.no-results {
+  color: #ddd;
+  font-size: 1.2rem;
+  text-align: center;
+  padding: 2rem;
+  font-style: italic;
+}
+
+/* Estilos para el indicador de carga */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.spinner-icon {
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  font-size: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: #495057;
+  border-radius: 15px;
+  width: 500px;
+  max-width: 90vw;
+  padding: 2rem;
+  color: white;
+  text-align: center;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+.modal-message {
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: white;
+  line-height: 1.5;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.modal-button {
+  background-color: white;
+  color: #333;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  min-width: 100px;
+  transition: all 0.3s ease;
+}
+
+.modal-button:hover {
+  background-color: #1797DC;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 151, 220, 0.3);
+}
+
+.si-button, .no-button {
+  min-width: 100px;
+}
+
+/* Animations for modal */
+@keyframes slideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
   }
-  
-  .results-panel {
-    flex: 1;
-    overflow: auto;
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
-  
-  /* Estilos para editores de consulta */
+}
+
+/* Media queries para responsividad */
+@media (max-width: 992px) {
   .query-editors {
-    display: flex;
-    gap: 2rem;
-    margin-bottom: 1.5rem;
+    flex-direction: column;
   }
   
   .editor-container {
-    flex: 1;
-    max-width: 48%;
-  }
-  
-  .editor-container h3 {
-    margin-bottom: 0.8rem;
-    color: white;
-    font-size: 1.6rem;
-    font-weight: normal;
-  }
-  
-  .query-editor {
-    width: 100%;
-    height: 180px;
-    padding: 1rem;
-    border: none;
-    border-radius: 5px;
-    resize: none;
-    background-color: white;
-    font-family: monospace;
-    font-size: 1.2rem;
-    color: #333;
-  }
-  
-  /* Estilos para el contenedor CQL y botón de copia */
-  .cql-container {
-    position: relative;
-  }
-  
-  .copy-button {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background: none;
-    border: none;
-    color: #4e5359;
-    cursor: pointer;
-    font-size: 1.5rem;
-    z-index: 10;
-  }
-  
-  .copy-button:hover {
-    color: #000;
-  }
-  
-  .copy-button:disabled {
-    color: #ccc;
-    cursor: not-allowed;
-  }
-  
-  .copy-tooltip {
-    position: absolute;
-    top: -30px;
-    right: 0;
-    background-color: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 0.8rem;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  
-  .copy-tooltip.show {
-    opacity: 1;
-  }
-  
-  /* Estilos para el botón ejecutar */
-  .execute-button-container {
-    display: flex;
-    justify-content: center;
-  }
-  
-  .execute-button {
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-    min-width: 180px;
-    padding: 0.8rem 2rem !important;
-  }
-  
-  .execute-icon {
-    margin-left: 0.8rem;
-  }
-  
-  /* Estilos para el selector de base de datos */
-  .database-selector {
+    max-width: 100%;
     margin-bottom: 1.5rem;
   }
-  
-  .select-container {
-    margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .query-editor {
+    height: 150px;
   }
   
-  /* Estilo para el campo de solo lectura que parece un select */
-  .readonly-select {
+  .modal-container {
+    margin: 1rem;
+    min-width: auto;
+    width: calc(100% - 2rem);
+  }
+  
+  .modal-buttons {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .modal-button {
     width: 100%;
-    padding: 1rem;
-    border: none;
-    border-radius: 5px;
-    font-size: 1.2rem;
-    background-color: white;
-    color: #333;
-    height: 3.5rem;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  
-  .readonly-select .placeholder {
-    color: #999;
-  }
-  
-  /* Estilos para la tabla de resultados */
-  .results-table {
-    overflow-x: auto;
-  }
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  
-  th, td {
-    padding: 0.8rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid #7d7d7d;
-    font-size: 1.1rem;
-    color: white;
-  }
-  
-  th {
-    background-color: #3c4045;
-    color: white;
-    font-weight: normal;
-  }
-  
-  tr:nth-child(even) {
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-  
-  /* Mensajes de error */
-  .error-message {
-    background-color: rgba(255, 59, 48, 0.15);
-    border-left: 4px solid #ff3b30;
-    color: #ff8080;
-    padding: 0.8rem 1rem;
-    margin-bottom: 1.2rem;
-    border-radius: 4px;
-    font-size: 1rem;
-    animation: fadeIn 0.3s ease-in-out;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-5px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  /* Estilos para el área sin resultados */
-  .no-results {
-    color: #ddd;
-    font-size: 1.2rem;
-    text-align: center;
-    padding: 2rem;
-    font-style: italic;
-  }
-  
-  /* Estilos para el indicador de carga */
-  .loading-indicator {
-    display: flex;
-    align-items: center;
-    color: white;
-    background-color: rgba(255, 255, 255, 0.1);
-    padding: 8px 12px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-    font-size: 0.9rem;
-  }
-  
-  .spinner-icon {
-    animation: spin 1s linear infinite;
-    margin-right: 8px;
-    font-size: 1rem;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  /* Media queries para responsividad */
-  @media (max-width: 992px) {
-    .query-editors {
-      flex-direction: column;
-    }
-    
-    .editor-container {
-      max-width: 100%;
-      margin-bottom: 1.5rem;
-    }
-  }
-  
-  @media (max-width: 768px) {
-    .query-editor {
-      height: 150px;
-    }
-  }
+}

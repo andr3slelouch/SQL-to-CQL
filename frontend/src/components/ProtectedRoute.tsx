@@ -1,7 +1,7 @@
-// src/components/ProtectedRoute.tsx
 import React, { useEffect, useState, memo } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
 
 interface ProtectedRouteProps {
   redirectPath?: string;
@@ -77,7 +77,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
         if (!hasReloaded) {
           // Marcar que hemos recargado
           sessionStorage.setItem('admin-route-reloaded', 'true');
-          
           // Forzar recarga
           console.log('Recargando después de redirección a ruta de admin...');
           window.location.reload();
@@ -89,19 +88,18 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
     }
   }, [location]);
   
-  // Resto del código...
-  // [Mantén todo el código original a partir de aquí]
-  
   // Verificar autenticación local UNA SOLA VEZ al montar el componente
   useEffect(() => {
-    // Verificar el token en localStorage directamente
-    const token = localStorage.getItem('accessToken');
-    const userDataStr = localStorage.getItem('userData');
+    console.log('ProtectedRoute: Verificando autenticación local');
+    
+    // Verificar sesión en sessionStorage
+    const token = sessionStorage.getItem('accessToken');
+    const userDataStr = sessionStorage.getItem('userData');
     
     if (token && userDataStr) {
       try {
         // Verificar si el token ha expirado
-        const expiration = localStorage.getItem('tokenExpiration');
+        const expiration = sessionStorage.getItem('tokenExpiration');
         let isTokenValid = false;
         
         if (expiration) {
@@ -113,18 +111,15 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
         const userData = JSON.parse(userDataStr);
         const isUserDataValid = !!userData && !!userData.nombre;
         
-        // Actualizar estado local
-        const finalAuthState = isTokenValid && isUserDataValid;
-        setIsLocallyAuthenticated(finalAuthState);
-        
         // Determinar si el usuario es administrador
-        if (userData && userData.rol === true) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
+        const isUserAdmin = userData && userData.rol === true ? true : false;
+        
+        setIsLocallyAuthenticated(isTokenValid && isUserDataValid);
+        setIsAdmin(isUserAdmin);
+        
+        console.log(`Autenticación en sessionStorage: ${isTokenValid && isUserDataValid ? 'Válida' : 'Inválida'}`);
       } catch (e) {
-        console.error('Error en verificación local:', e);
+        console.error('Error en verificación de sessionStorage:', e);
         setIsLocallyAuthenticated(false);
         setIsAdmin(false);
       }
@@ -139,7 +134,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
   // Actualizar isAdmin cuando cambia el usuario del contexto
   useEffect(() => {
     if (!user) return;
-    
     const newIsAdmin = user.rol === true;
     if (newIsAdmin !== isAdmin) {
       setIsAdmin(newIsAdmin);
@@ -171,7 +165,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
       // Usuario regular intentando acceder a rutas de admin
       if (isAdminRoute && isAdmin === false) {
         shouldRedirect = true;
-        
         // Ruta específica de admin/translator para usuario normal
         if (location.pathname === '/admin/translator') {
           targetPath = '/translator';
@@ -191,7 +184,6 @@ const ProtectedRouteLogic = ({ redirectPath = '/' }: ProtectedRouteProps) => {
     if (shouldRedirect && targetPath !== '' && targetPath !== location.pathname) {
       // Evitar bucles de redirección
       const lastRedirect = sessionStorage.getItem('lastRedirect');
-      
       if (lastRedirect) {
         try {
           const { from, to, timestamp } = JSON.parse(lastRedirect);

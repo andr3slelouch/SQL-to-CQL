@@ -1,5 +1,3 @@
-// src/services/AuthApiService.ts
-
 import AuthService, { User } from './AuthService';
 
 export interface LoginCredentials {
@@ -18,6 +16,8 @@ class AuthApiService {
   // Método para realizar el inicio de sesión
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
+      console.log('Iniciando sesión en modo multi-pestaña automático');
+      
       // Realizar la petición de login directamente sin usar HttpService
       // porque aún no tenemos token para las cabeceras
       const response = await fetch('http://localhost:3001/api/auth/login', {
@@ -27,16 +27,14 @@ class AuthApiService {
         },
         body: JSON.stringify(credentials),
       });
-
+      
       if (!response.ok) {
         // Manejo de errores según el código HTTP
         if (response.status === 429) {
           // Extraer el mensaje del backend para demasiados intentos fallidos
           const errorData = await response.json();
-          
           // Formatear el mensaje para que sea más amigable
           let message = errorData.message || 'Demasiados intentos fallidos. Intente más tarde.';
-          
           // Verificar si el mensaje contiene información sobre el tiempo de espera
           if (message.includes('minutos')) {
             // El mensaje ya está formateado correctamente
@@ -54,42 +52,29 @@ class AuthApiService {
       
       // Procesar la respuesta exitosa
       const data = await response.json() as LoginResponse;
+      console.log('Login exitoso, guardando datos de autenticación');
       
-      // Guardar la información de autenticación
+      // Guardar la información de autenticación en sessionStorage
       AuthService.saveAuthData(data.accessToken, data.user, data.expiresIn);
-      
-      // Configurar temporizador para refrescar el token antes de que expire
-      AuthService.setupTokenRefresh(data.expiresIn);
       
       return data;
     } catch (error) {
+      console.error('Error en login:', error);
       // Re-lanzar el error para que lo maneje el componente
       throw error;
     }
   }
-
+  
   // Método para verificar el estado del token
   async verifyToken(): Promise<boolean> {
-    // No necesitamos hacer una solicitud al servidor si el token no está en localStorage
-    if (!AuthService.getAccessToken()) {
-      return false;
-    }
-    
-    try {
-      
-      return AuthService.isAuthenticated();
-    } catch (error) {
-      console.error('Error al verificar el token:', error);
-      return false;
-    }
+    // Simplemente verificar en sessionStorage
+    return AuthService.isAuthenticated();
   }
-
+  
   // Método para cerrar sesión
-  logout(): void {
-    
-    
-    // Limpiamos la información de autenticación local
-    AuthService.logout();
+  logout(redirectToLogin: boolean = true): void {
+    // Limpiamos la información de autenticación
+    AuthService.logout(redirectToLogin);
   }
 }
 

@@ -1,4 +1,3 @@
-// src/components/LoginPage.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,7 +40,6 @@ const LoginPage: React.FC = () => {
       ...prevState,
       [id]: value
     }));
-    
     // Limpiar mensaje de error al modificar algún campo
     if (error) {
       setError(null);
@@ -52,16 +50,14 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-  
+    
     try {
-      // Usar AuthApiService para el login
+      // Enviar solicitud de inicio de sesión
       await AuthApiService.login(formData);
       
       // En este punto el usuario ha iniciado sesión correctamente
-      // Usar navigate con replace para evitar la historia de navegación
-      // y hacer una transición más rápida
+      // Navegar a la página principal
       navigate('/translator', { replace: true });
-      
     } catch (error) {
       if (error instanceof Error) {
         // Determinar el tipo de error para aplicar estilo específico
@@ -101,13 +97,11 @@ const LoginPage: React.FC = () => {
           <span>¿No tienes una cuenta? </span>
           <Link to="/registro" className="register-link">Regístrate</Link>
         </div>
-        
         {error && (
           <div className={`error-message ${error.type}`}>
             {error.message}
           </div>
         )}
-        
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="nombre">Nombre de Usuario</label>
@@ -142,8 +136,9 @@ const LoginPage: React.FC = () => {
               required
             />
           </div>
-          <button 
-            type="submit" 
+          
+          <button
+            type="submit"
             className="login-button"
             disabled={isLoading}
           >

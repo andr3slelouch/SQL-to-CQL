@@ -1,7 +1,16 @@
 // src/components/layouts/AdminLayout.tsx
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaArrowsAltH, FaKey, FaUserMinus, FaDatabase, FaCog, FaSignOutAlt, FaUserCircle } from 'react-icons/fa';
+import { 
+  FaArrowsAltH, 
+  FaKey, 
+  FaUserMinus, 
+  FaDatabase, 
+  FaCog, 
+  FaSignOutAlt, 
+  FaUserCircle,
+  FaTrashAlt
+} from 'react-icons/fa';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../styles/AdminLayout.css';
 
@@ -20,6 +29,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children}) => {
     { path: '/admin/generar-pin', icon: <FaKey />, text: 'Generar PIN' },
     { path: '/admin/eliminar-usuario', icon: <FaUserMinus />, text: 'Eliminar Usuario' },
     { path: '/admin/asignar-bases', icon: <FaDatabase />, text: 'Asignar Bases de Datos' },
+    { path: '/admin/eliminar-bases', icon: <FaTrashAlt />, text: 'Eliminar Bases de Datos' },
     { path: '/admin/configurar-permisos', icon: <FaCog />, text: 'Configurar Permisos' },
   ];
 
@@ -50,6 +60,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children}) => {
           <span>Salir</span>
         </div>
       </div>
+
       {/* Contenido principal */}
       <div className="admin-main">
         {/* Barra superior con usuario en la esquina derecha */}
@@ -59,6 +70,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children}) => {
             <FaUserCircle className="admin-user-icon" />
           </div>
         </div>
+
         {/* Contenido específico de la página */}
         <div className="admin-content">
           {children}
