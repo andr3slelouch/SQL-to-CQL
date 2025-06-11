@@ -252,21 +252,50 @@ export class KeyspacesService {
 
   /**
    * Actualiza un keyspace específico del usuario (añadir o eliminar)
+   * COMPATIBILIDAD: Permite auto-asignación para usuarios regulares
    * @param keyspaceUpdateDto DTO con la cédula, keyspace y acción
+   * @param currentUser Usuario que realiza la operación (para validación de permisos)
    * @returns Respuesta con los keyspaces actualizados del usuario
    */
-  async updateSingleKeyspace(keyspaceUpdateDto: KeyspaceUpdateDto): Promise<UserPermissionsResponse> {
-    const { cedula, keyspace, action } = keyspaceUpdateDto;
+  async updateSingleKeyspace(keyspaceUpdateDto: KeyspaceUpdateDto, currentUser?: any): Promise<UserPermissionsResponse> {
+    const { cedula, keyspace: originalKeyspace, action } = keyspaceUpdateDto;
+
+    // NORMALIZAR: Siempre usar minúsculas para consistencia con Cassandra
+    const keyspace = originalKeyspace.toLowerCase();
+    
+    this.logger.log(`Normalizando keyspace: "${originalKeyspace}" -> "${keyspace}"`);
 
     try {
-      // Verificar que el usuario existe
-      const user = await this.userFinderUtil.findByCedula(cedula);
-      if (!user) {
+      // Verificar que el usuario objetivo existe
+      const targetUser = await this.userFinderUtil.findByCedula(cedula);
+      if (!targetUser) {
         throw new NotFoundException(`No se encontró un usuario con la cédula: ${cedula}`);
       }
 
-      // Si el usuario es administrador, permitimos la actualización pero registramos el evento
-      if (user.rol === true) {
+      // Obtener información del usuario actual (quien hace la petición)
+      let currentUserInfo: any = null;
+      if (currentUser && currentUser.sub) {
+        try {
+          currentUserInfo = await this.userFinderUtil.findByCedula(currentUser.sub);
+        } catch (error) {
+          this.logger.warn(`No se pudo obtener información del usuario actual: ${currentUser.sub}`);
+        }
+      }
+
+      // VALIDACIÓN DE PERMISOS: Solo admins pueden asignar a otros usuarios
+      if (currentUserInfo) {
+        const isAdmin = currentUserInfo.rol === true;
+        const isSelfAssignment = currentUserInfo.cedula === cedula;
+        
+        if (!isAdmin && !isSelfAssignment) {
+          throw new NotFoundException(`No tiene permisos para modificar los keyspaces de otro usuario`);
+        }
+        
+        this.logger.log(`Operación realizada por usuario ${currentUserInfo.cedula} (admin: ${isAdmin}, self: ${isSelfAssignment})`);
+      }
+
+      // Si el usuario objetivo es administrador, permitimos la actualización pero registramos el evento
+      if (targetUser.rol === true) {
         this.logger.log(`Actualizando keyspace para un administrador: ${cedula}`);
         // Obtener todos los keyspaces disponibles
         const keyspacesQuery = "SELECT keyspace_name FROM system_schema.keyspaces";
@@ -276,10 +305,14 @@ export class KeyspacesService {
 
         // Asegurarse de que el keyspace solicitado esté en la lista si es 'add'
         let updatedKeyspaces = [...allKeyspaces];
-        if (action === 'add' && !updatedKeyspaces.includes(keyspace)) {
+        
+        // FIX: Comparación case-insensitive para evitar duplicados
+        if (action === 'add' && !updatedKeyspaces.some(ks => ks.toLowerCase() === keyspace.toLowerCase())) {
+          // NORMALIZACIÓN: Usar el keyspace normalizado (minúsculas)
           updatedKeyspaces.push(keyspace);
         } else if (action === 'remove') {
-          updatedKeyspaces = updatedKeyspaces.filter(k => k !== keyspace);
+          // FIX: Filtrado case-insensitive para remover correctamente
+          updatedKeyspaces = updatedKeyspaces.filter(k => k.toLowerCase() !== keyspace.toLowerCase());
         }
 
         // Actualizar la base de datos
@@ -288,8 +321,8 @@ export class KeyspacesService {
 
         return {
           cedula,
-          nombre: user.nombre,
-          rol: user.rol,
+          nombre: targetUser.nombre,
+          rol: targetUser.rol,
           operaciones: ADMIN_DEFAULT_OPERATIONS,
           operacionesDisponibles: AVAILABLE_OPERATIONS,
           keyspaces: updatedKeyspaces
@@ -300,6 +333,7 @@ export class KeyspacesService {
       let skipKeyspaceVerification = false;
       if (action === 'add') {
         try {
+          // NORMALIZACIÓN: Verificar usando el keyspace normalizado
           const validKeyspacesQuery = "SELECT keyspace_name FROM system_schema.keyspaces WHERE keyspace_name = ?";
           const validKeyspacesResult = await this.cassandraClient.execute(validKeyspacesQuery, [keyspace], { prepare: true });
           if (validKeyspacesResult.rowLength === 0) {
@@ -312,7 +346,7 @@ export class KeyspacesService {
         }
       }
 
-      // Obtener los permisos actuales del usuario
+      // Obtener los permisos actuales del usuario objetivo
       const query = 'SELECT cedula, keyspaces, operaciones FROM auth.permissions WHERE cedula = ?';
       const result = await this.cassandraClient.execute(query, [cedula], { prepare: true });
 
@@ -322,6 +356,7 @@ export class KeyspacesService {
       if (result.rowLength === 0) {
         // Si el usuario no tiene permisos, creamos un nuevo registro
         if (action === 'add') {
+          // NORMALIZACIÓN: Usar el keyspace normalizado
           userKeyspaces = [keyspace];
         }
         const insertQuery = 'INSERT INTO auth.permissions (cedula, keyspaces, operaciones) VALUES (?, ?, ?)';
@@ -334,13 +369,14 @@ export class KeyspacesService {
 
         // Actualizar la lista de keyspaces según la acción
         if (action === 'add') {
-          // Verificar si ya existe el keyspace
-          if (!userKeyspaces.includes(keyspace)) {
+          // FIX: Verificación case-insensitive para evitar duplicados
+          if (!userKeyspaces.some(ks => ks.toLowerCase() === keyspace.toLowerCase())) {
+            // NORMALIZACIÓN: Agregar el keyspace normalizado
             userKeyspaces.push(keyspace);
           }
         } else {
-          // Eliminar el keyspace si existe
-          userKeyspaces = userKeyspaces.filter(k => k !== keyspace);
+          // FIX: Eliminación case-insensitive para remover correctamente
+          userKeyspaces = userKeyspaces.filter(k => k.toLowerCase() !== keyspace.toLowerCase());
         }
 
         const updateQuery = 'UPDATE auth.permissions SET keyspaces = ? WHERE cedula = ?';
@@ -352,8 +388,8 @@ export class KeyspacesService {
       // Devolver los keyspaces actualizados
       return {
         cedula,
-        nombre: user.nombre,
-        rol: user.rol,
+        nombre: targetUser.nombre,
+        rol: targetUser.rol,
         operaciones: operaciones,
         operacionesDisponibles: AVAILABLE_OPERATIONS,
         keyspaces: userKeyspaces
