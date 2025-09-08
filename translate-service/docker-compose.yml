@@ -1,24 +1,24 @@
-version: '3'
-
 services:
   cassandra:
-    build:
-      context: .
-      dockerfile: Dockerfile-cassandra
+    image: cassandra:latest
     container_name: sql-translator-cassandra
     ports:
       - "9042:9042"
     environment:
       - CASSANDRA_CLUSTER_NAME=SqlTranslatorCluster
+      # Added from working example for proper startup
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch
+      # Your desired authentication settings
+      - CASSANDRA_AUTHENTICATOR=PasswordAuthenticator
+      - CASSANDRA_AUTHORIZER=CassandraAuthorizer
+      - CASSANDRA_USER=cassandra
+      - CASSANDRA_PASSWORD=cassandra
     volumes:
       - cassandra-data:/var/lib/cassandra
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "cqlsh", "-u", "cassandra", "-p", "cassandra", "-e", "describe keyspaces"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
 
 networks:
   app-network:
