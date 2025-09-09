@@ -11,7 +11,7 @@ const TRANSLATE_SERVICE_URL = 'http://localhost:3000/api';
 const TEST_USER = {
     cedula: '123456789',
     nombre: 'Test User', // The API requires this field
-    contrasena: 'YOUR_PASSWORD_HERE' 
+    contrasena: 'password' 
 };
 
 // --- Dummy User for Failed Login Attempts ---
@@ -72,8 +72,11 @@ export function successfulFlow() {
         
         loginDuration.add(res.timings.duration);
         
+        // Corrected variable name from loginSuccess to loginCheck
         const loginCheck = check(res, {
+            // Corrected status check from 201 to 200
             'Login successful (status 200)': (r) => r.status === 200,
+            // Corrected token key from access_token to accessToken
             'Response contains accessToken': (r) => r.json('accessToken') !== undefined,
         });
 
@@ -86,9 +89,8 @@ export function successfulFlow() {
 
     if (accessToken) {
         group('Authenticated Query', () => {
-            // FIX: Changed property name from 'query' to 'sql' to match the translator service's expectation.
             const queryPayload = JSON.stringify({
-                sql: "SELECT * FROM system.local;", 
+                query: "SELECT * FROM system.local;",
                 keyspace: "system"
             });
 
