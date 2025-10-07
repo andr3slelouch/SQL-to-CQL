@@ -1,193 +1,171 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Client, auth, types } from 'cassandra-driver';
 import { ConfigService } from '@nestjs/config';
-import { Client, types, auth } from 'cassandra-driver';
 
 @Injectable()
 export class CassandraService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(CassandraService.name);
-  private client: Client;
+    private readonly logger = new Logger(CassandraService.name);
+    private client: Client;
 
-  constructor(private configService: ConfigService) {}
+    constructor(private configService: ConfigService) {}
 
-  async onModuleInit() {
-    const contactPoint = this.configService.get<string>('CASSANDRA_CONTACT_POINT', 'localhost');
-    const port = parseInt(this.configService.get<string>('CASSANDRA_PORT', '9042'), 10);
-    const keyspace = this.configService.get<string>('CASSANDRA_KEYSPACE', 'sql_translator');
-    // Usar credenciales predeterminadas para simplificar
-    const username = 'cassandra';
-    const password = 'cassandra';
-    const datacenter = this.configService.get<string>('CASSANDRA_DATA_CENTER', 'datacenter1');
+    async onModuleInit() {
+        await this.connect();
+    }
 
-    this.logger.log(`Intentando conectar a Cassandra con usuario: ${username}`);
+    async onModuleDestroy() {
+        await this.disconnect();
+    }
 
-    // Crear auth provider con las credenciales predeterminadas
-    const authProvider = new auth.PlainTextAuthProvider(username, password);
+    /**
+     * Establishes a resilient connection to Cassandra by first ensuring the keyspace exists.
+     */
+    private async connect() {
+        const host = this.configService.get<string>('CASSANDRA_HOST');
+        const port = this.configService.get<number>('CASSANDRA_PORT');
+        const user = this.configService.get<string>('CASSANDRA_USER');
+        const password = this.configService.get<string>('CASSANDRA_PASSWORD');
+        const keyspace = this.configService.get<string>('CASSANDRA_KEYSPACE');
+        const datacenter = this.configService.get<string>('CASSANDRA_DATA_CENTER', 'datacenter1');
 
-    try {
-      // Primero conectar sin keyspace para crearlo si no existe
-      const tempClient = new Client({
-        contactPoints: [`${contactPoint}:${port}`],
-        localDataCenter: datacenter,
-        authProvider,
-      });
-      
-      await tempClient.connect();
-      this.logger.log('Conectado temporalmente a Cassandra para verificar keyspace');
-      
-      // Crear keyspace si no existe
-      await this.createKeyspaceIfNotExists(tempClient, keyspace);
-      
-      await tempClient.shutdown();
-      
-      // Ahora conectar con el keyspace
-      this.client = new Client({
-        contactPoints: [`${contactPoint}:${port}`],
-        localDataCenter: datacenter,
-        keyspace,
-        authProvider,
-        queryOptions: {
-          consistency: types.consistencies.quorum
+        if (!host || !port || !user || !password || !keyspace) {
+            this.logger.error('Missing one or more required Cassandra environment variables (HOST, PORT, USER, PASSWORD, KEYSPACE)');
+            throw new InternalServerErrorException('Cassandra configuration is incomplete.');
         }
-      });
-      
-      await this.client.connect();
-      this.logger.log(`Conectado a Cassandra con keyspace: ${keyspace}`);
-    } catch (error) {
-      this.logger.error(`Error al conectar con Cassandra: ${error.message}`);
-      throw error;
-    }
-  }
 
-  async onModuleDestroy() {
-    if (this.client) {
-      await this.client.shutdown();
-      this.logger.log('Desconectado de Cassandra');
-    }
-  }
+        this.logger.log(`Attempting to connect to Cassandra at ${host}:${port} with user: ${user}`);
 
-  async createKeyspaceIfNotExists(client: Client, keyspaceName: string) {
-    const query = `
-      CREATE KEYSPACE IF NOT EXISTS ${keyspaceName}
-      WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
-    `;
-    
-    try {
-      await client.execute(query);
-      this.logger.log(`Keyspace ${keyspaceName} creado o ya existe`);
-    } catch (error) {
-      this.logger.error(`Error al crear keyspace: ${error.message}`);
-      throw error;
-    }
-  }
+        const authProvider = new auth.PlainTextAuthProvider(user, password);
 
-  /**
-   * Obtiene el cliente de Cassandra actual
-   * @param token 
-   * @returns Cliente de Cassandra
-   */
-  async getClient(token?: string): Promise<Client> {
-    return this.client;
-  }
+        // Step 1: Connect without a keyspace to create it if it doesn't exist
+        const tempClient = new Client({
+            contactPoints: [host],
+            protocolOptions: { port },
+            localDataCenter: datacenter,
+            authProvider,
+        });
 
-  /**
-   * Ejecuta una consulta CQL en Cassandra
-   * @param query Consulta CQL a ejecutar
-   * @param params Parámetros opcionales para la consulta
-   * @returns Conjunto de resultados de Cassandra
-   */
-  async execute(query: string, params: any[] = []): Promise<types.ResultSet> {
-    try {
-      return await this.client.execute(query, params, { prepare: true });
-    } catch (error) {
-      this.logger.error(`Error ejecutando query en Cassandra: ${error.message}`);
-      throw error;
-    }
-  }
+        try {
+            await tempClient.connect();
+            this.logger.log('Temporarily connected to Cassandra to verify keyspace.');
 
-  /**
-   * Ejecuta un batch de consultas CQL en Cassandra
-   * @param batch Información del batch a ejecutar
-   * @returns Resultado de la ejecución del batch
-   */
-  async executeBatch(batch: { queries: string[] }): Promise<any> {
-    try {
-      this.logger.log(`Ejecutando batch con ${batch.queries.length} consultas`);
-      
-      // Convertir strings de consultas a objetos de consulta para cassandra-driver
-      const batchQueries = batch.queries.map(query => ({ query }));
-      
-      // Verificar que hay consultas para ejecutar
-      if (batchQueries.length === 0) {
-        throw new Error('No hay consultas para ejecutar en el batch');
-      }
-      
-      // Ejecutar el batch
-      const result = await this.client.batch(batchQueries, { prepare: true });
-      
-      this.logger.log(`Batch ejecutado con éxito.`);
-      
-      return {
-        success: true,
-        message: `Batch ejecutado con éxito: ${batch.queries.length} operaciones`,
-        affectedRows: batch.queries.length,
-        info: result.info
-      };
-    } catch (error) {
-      this.logger.error(`Error al ejecutar batch CQL: ${error.message}`);
-      throw error;
-    }
-  }
+            // Step 2: Create the keyspace if it's not already there
+            const createKeyspaceQuery = `
+        CREATE KEYSPACE IF NOT EXISTS ${keyspace}
+        WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
+      `;
+            await tempClient.execute(createKeyspaceQuery);
+            this.logger.log(`Keyspace "${keyspace}" has been created or already exists.`);
+            await tempClient.shutdown();
 
-  /**
-   * Extrae las sentencias individuales de un string CQL que contiene un BATCH
-   * @param batchCql Consulta CQL que contiene un BATCH
-   * @returns Array de sentencias CQL individuales
-   */
-  extractBatchStatements(batchCql: string): string[] {
-    try {
-      // Extraer el contenido entre BEGIN BATCH y APPLY BATCH
-      const batchMatch = batchCql.match(/BEGIN\s+BATCH\s+([\s\S]*?)\s+APPLY\s+BATCH/i);
-      
-      if (!batchMatch || !batchMatch[1]) {
-        this.logger.error('No se pudo extraer el contenido del BATCH');
-        return [];
-      }
-      
-      const batchContent = batchMatch[1].trim();
-      
-      // Dividir en sentencias individuales (terminadas en punto y coma)
-      const statements = batchContent
-        .split(';')
-        .map(stmt => stmt.trim())
-        .filter(stmt => stmt.length > 0)
-        .map(stmt => stmt + ';');
-      
-      if (statements.length === 0) {
-        this.logger.error('No se encontraron sentencias válidas en el BATCH');
-        return [];
-      }
-      
-      return statements;
-    } catch (error) {
-      this.logger.error(`Error al extraer sentencias del BATCH: ${error.message}`);
-      return [];
-    }
-  }
+            // Step 3: Establish the final, permanent connection to the desired keyspace
+            this.client = new Client({
+                contactPoints: [host],
+                protocolOptions: { port },
+                localDataCenter: datacenter,
+                authProvider: authProvider,
+                keyspace: keyspace,
+                queryOptions: { consistency: types.consistencies.quorum },
+            });
 
-  /**
-   * Ejecuta un BATCH a partir de un string CQL completo que contiene un BATCH
-   * @param batchCql String CQL completo con formato BEGIN BATCH ... APPLY BATCH
-   * @returns Resultado de la ejecución del batch
-   */
-  async executeBatchFromString(batchCql: string): Promise<any> {
-    // Extraer las sentencias individuales del BATCH
-    const statements = this.extractBatchStatements(batchCql);
-    
-    if (statements.length === 0) {
-      throw new Error('No se pudieron extraer sentencias válidas del BATCH');
+            await this.client.connect();
+            this.logger.log(`Successfully connected to Cassandra and set keyspace to "${keyspace}"`);
+
+        } catch (error) {
+            this.logger.error('Failed to connect to Cassandra:', error.stack);
+            if (tempClient) await tempClient.shutdown();
+            throw error;
+        }
     }
-    
-    // Ejecutar el batch con las sentencias extraídas
-    return await this.executeBatch({ queries: statements });
-  }
+
+    /**
+     * Gracefully shuts down the Cassandra client connection.
+     */
+    private async disconnect() {
+        if (this.client) {
+            this.logger.log('Disconnecting from Cassandra...');
+            await this.client.shutdown();
+            this.logger.log('Cassandra connection closed.');
+        }
+    }
+
+    /**
+     * Executes a single CQL query.
+     */
+    async execute(query: string, params: any[] = []): Promise<types.ResultSet> {
+        if (!this.client) {
+            throw new InternalServerErrorException('Cassandra client is not connected.');
+        }
+        try {
+            return await this.client.execute(query, params, { prepare: true });
+        } catch (error) {
+            this.logger.error(`Error executing query in Cassandra: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Provides direct access to the Cassandra client instance.
+     */
+    getClient(): Client {
+        return this.client;
+    }
+
+    /**
+     * Executes a batch of queries.
+     */
+    async executeBatch(batch: { queries: string[] }): Promise<any> {
+        if (!this.client) {
+            throw new InternalServerErrorException('Cassandra client is not connected.');
+        }
+        try {
+            this.logger.log(`Executing batch with ${batch.queries.length} queries`);
+            const batchQueries = batch.queries.map(query => ({ query }));
+
+            if (batchQueries.length === 0) {
+                throw new Error('No queries to execute in the batch');
+            }
+
+            const result = await this.client.batch(batchQueries, { prepare: true });
+            this.logger.log('Batch executed successfully.');
+            return {
+                success: true,
+                message: `Batch executed successfully: ${batch.queries.length} operations`,
+                affectedRows: batch.queries.length,
+                info: result.info,
+            };
+        } catch (error) {
+            this.logger.error(`Error executing CQL batch: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Extracts individual statements from a BEGIN BATCH...APPLY BATCH string.
+     */
+    extractBatchStatements(batchCql: string): string[] {
+        const batchMatch = batchCql.match(/BEGIN\s+BATCH\s+([\s\S]*?)\s+APPLY\s+BATCH/i);
+        if (!batchMatch || !batchMatch[1]) {
+            this.logger.error('Could not extract content from BATCH string');
+            return [];
+        }
+        const batchContent = batchMatch[1].trim();
+        return batchContent
+            .split(';')
+            .map(stmt => stmt.trim())
+            .filter(stmt => stmt.length > 0)
+            .map(stmt => stmt + ';');
+    }
+
+    /**
+     * Executes a full BATCH statement provided as a single string.
+     */
+    async executeBatchFromString(batchCql: string): Promise<any> {
+        const statements = this.extractBatchStatements(batchCql);
+        if (statements.length === 0) {
+            throw new Error('Could not extract valid statements from the BATCH string');
+        }
+        return this.executeBatch({ queries: statements });
+    }
 }
+
