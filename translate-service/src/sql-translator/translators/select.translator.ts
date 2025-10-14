@@ -50,7 +50,10 @@ export class SelectTranslator implements Translator {
       if (limit) {
         cql += ` ${limit}`;
       }
-      
+
+      if (where) {
+          cql += ' ALLOW FILTERING';
+      }
       return cql;
     } catch (error: any) {
       this.logger.error(`Error al traducir SELECT: ${error.message}`);

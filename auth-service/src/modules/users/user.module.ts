@@ -6,6 +6,7 @@ import { DeleteUserController } from './controllers/delete-user.controller';
 import { SearchUserController } from './controllers/search-user.controller';
 import { ChangePasswordService } from './services/change-password.service';
 import { ChangePasswordController } from './controllers/change-password.controller';
+import { UserSeederService } from './services/user-seeder.service';
 import { UserFinderUtil } from '../../common/utils/user-finder.util';
 import { DatabaseModule } from '../../database/database.module';
 
@@ -21,13 +22,13 @@ import { DatabaseModule } from '../../database/database.module';
     CreateUserService, 
     DeleteUserService, 
     ChangePasswordService,
-    UserFinderUtil
+    UserFinderUtil, UserSeederService,
   ],
   exports: [
     CreateUserService, 
     DeleteUserService, 
     ChangePasswordService,
-    UserFinderUtil
+    UserFinderUtil, UserSeederService,
   ],
 })
 export class UserModule {}

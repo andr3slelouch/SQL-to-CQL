@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { cassandraProvider } from './cassandra.provider';
+// Correct the import casing from 'cassandraProvider' to 'CassandraProvider'. This resolves the TS2724 error.
+import { CassandraProvider } from './cassandra.provider';
 
 @Module({
-  imports: [ConfigModule],
-  providers: [cassandraProvider],
-  exports: [cassandraProvider],
+    providers: [CassandraProvider],
+    exports: [CassandraProvider],
 })
 export class DatabaseModule {}

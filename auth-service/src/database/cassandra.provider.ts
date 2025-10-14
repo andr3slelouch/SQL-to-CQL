@@ -1,77 +1,105 @@
-import { Provider } from '@nestjs/common';
-import { Client, policies } from 'cassandra-driver';
-
+import { Provider, Logger } from '@nestjs/common';
+import { Client, auth } from 'cassandra-driver';
+import { ConfigService } from '@nestjs/config';
 export const CASSANDRA_CLIENT = 'CASSANDRA_CLIENT';
 
-export const cassandraProvider: Provider = {
-  provide: CASSANDRA_CLIENT,
-  useFactory: async () => {
-    const contactPoints = [process.env.DB_HOST || 'localhost'];
-    const localDataCenter = process.env.DB_DATA_CENTER || 'datacenter1';
-    const keyspace = process.env.DB_KEYSPACE || 'auth';
-    const protocolOptions = {
-      port: parseInt(process.env.DB_PORT || '9042', 10)
-    };
-    const credentials = {
-      username: process.env.DB_USERNAME || 'cassandra',
-      password: process.env.DB_PASSWORD || 'cassandra'
-    };
-
-    // Connect without keyspace to create it if it does not exist
-    const tempClient = new Client({
-      contactPoints,
-      localDataCenter,
-      protocolOptions,
-      credentials,
-    });
-
+/**
+ * Sets up the required database tables for the auth-service.
+ * This function is now only responsible for creating the table structures.
+ * User seeding is handled by the UserSeederService.
+ * @param client - The connected Cassandra client instance.
+ * @param logger - The logger instance for logging messages.
+ */
+const setupTables = async (client: Client, logger: Logger) => {
     try {
-      await tempClient.connect();
-      const query = `
-        CREATE KEYSPACE IF NOT EXISTS ${keyspace}
-        WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}
-      `;
-      await tempClient.execute(query);
-      await tempClient.shutdown();
-    } catch (error) {
-      console.error('❌ Error creating keyspace:', error);
-      await tempClient.shutdown();
-      throw error;
-    }
+        // 1. Create the 'users' table
+        await client.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        cedula text PRIMARY KEY,
+        nombre text,
+        contrasena text,
+        pin text,
+        rol boolean,
+        estado boolean
+      )
+    `);
+        logger.log("Schema setup: Ensured 'users' table exists.");
 
-    const client = new Client({
-      contactPoints,
-      localDataCenter,
-      keyspace,
-      protocolOptions,
-      credentials,
-      queryOptions: {
-        consistency: 1, // LOCAL_ONE
-        prepare: true
-      },
-      pooling: {
-        coreConnectionsPerHost: {
-          [0]: 2, // Local distance
-          [1]: 1, // Remote distance
-          [2]: 0  // Ignored distance
-        }
-      },
-      socketOptions: {
-        connectTimeout: 10000, // 10 segundos de timeout para la conexión
-        readTimeout: 12000     // 12 segundos de timeout para las consultas
-      },
-      policies: {
-        reconnection: new policies.reconnection.ExponentialReconnectionPolicy(1000, 10 * 60 * 1000, true)
-      }
-    });
+        // 2. Create the 'permissions' table
+        await client.execute(`
+      CREATE TABLE IF NOT EXISTS permissions (
+        cedula text PRIMARY KEY,
+        operaciones set<text>,
+        keyspaces set<text>
+      )
+    `);
+        logger.log("Schema setup: Ensured 'permissions' table exists.");
 
-    try {
-      await client.connect();
-      console.log(`✅ Conectado a la base de datos Cassandra (keyspace: ${keyspace})`);
-      return client;
     } catch (error) {
-      console.error('❌ Error al conectar a Cassandra:', error);
-      throw error;
+        logger.error('An error occurred during table setup.', error.stack);
+        throw error;
     }
-  },
 };
+
+export const CassandraProvider: Provider = {
+    provide: CASSANDRA_CLIENT,
+    inject: [ConfigService],
+    useFactory: async (configService: ConfigService) => {
+        const logger = new Logger('Auth-Service');
+        const host = configService.get<string>('CASSANDRA_HOST');
+        const port = configService.get<number>('CASSANDRA_PORT');
+        const user = configService.get<string>('CASSANDRA_USER');
+        const password = configService.get<string>('CASSANDRA_PASSWORD');
+        const keyspace = configService.get<string>('CASSANDRA_KEYSPACE');
+        const datacenter = 'datacenter1'; // As defined in your docker-compose files
+
+        if (!user || !password) {
+            throw new Error('Cassandra username or password is not defined in environment variables.');
+        }
+
+        logger.log(`Attempting to connect to Cassandra at ${host}:${port}`);
+
+        const tempClient = new Client({
+            contactPoints: [`${host}:${port}`],
+            localDataCenter: datacenter,
+            authProvider: new auth.PlainTextAuthProvider(user, password),
+        });
+
+        try {
+            await tempClient.connect();
+            logger.log('Temporarily connected to Cassandra to verify keyspace.');
+            await tempClient.execute(`
+        CREATE KEYSPACE IF NOT EXISTS ${keyspace}
+        WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }
+      `);
+            logger.log(`Keyspace "${keyspace}" has been created or already exists.`);
+            await tempClient.shutdown();
+        } catch (error) {
+            logger.error('Failed to create or verify keyspace.', error.stack);
+            await tempClient.shutdown();
+            throw error;
+        }
+
+        const mainClient = new Client({
+            contactPoints: [`${host}:${port}`],
+            localDataCenter: datacenter,
+            keyspace: keyspace,
+            authProvider: new auth.PlainTextAuthProvider(user, password),
+        });
+
+        try {
+            await mainClient.connect();
+            logger.log(`Successfully connected to Cassandra and set keyspace to "${keyspace}"`);
+
+            // Run the table setup logic
+            await setupTables(mainClient, logger);
+
+            return mainClient;
+        } catch (error) {
+            logger.error('Failed to connect to Cassandra or set up tables.', error.stack);
+            await mainClient.shutdown();
+            throw error;
+        }
+    },
+};
+
