@@ -90,12 +90,9 @@ export class SelectTranslator implements Translator {
         let args = '';
         
         if (col.expr.args && col.expr.args.expr) {
-          if (col.expr.args.expr.type === 'star') {
-            args = '*';
-          } else if (col.expr.args.expr.type === 'column_ref') {
-            const columnRef = col.expr.args.expr;
-            args = columnRef.table ? `${columnRef.table}.${columnRef.column}` : columnRef.column;
-          }
+          args = this.simplifyExpression(col.expr.args.expr);
+        } else if (col.expr.args && Array.isArray(col.expr.args)) {
+          args = col.expr.args.map((arg: any) => this.simplifyExpression(arg)).join(', ');
         }
         
         const alias = col.as ? ` AS ${col.as}` : '';
@@ -150,6 +147,13 @@ export class SelectTranslator implements Translator {
         
         if (operator === 'AND' || operator === 'OR') {
           return `${this.translateWhere(where.left)} ${operator} ${this.translateWhere(where.right)}`;
+        } else if (operator === 'BETWEEN') {
+          if (where.right && where.right.type === 'expr_list' && Array.isArray(where.right.value) && where.right.value.length === 2) {
+            const val1 = this.simplifyExpression(where.right.value[0]);
+            const val2 = this.simplifyExpression(where.right.value[1]);
+            return `${left} >= ${val1} AND ${left} <= ${val2}`;
+          }
+          return `${left} >= ${this.simplifyExpression(where.right.left)} AND ${left} <= ${this.simplifyExpression(where.right.right)}`;
         } else {
           return `${left} ${operator} ${right}`;
         }
@@ -203,6 +207,10 @@ export class SelectTranslator implements Translator {
         if (expr.value && Array.isArray(expr.value)) {
           return expr.value.map((val: any) => this.simplifyExpression(val)).join(', ');
         }
+      } else if (expr.type === 'cast') {
+        return this.simplifyExpression(expr.expr);
+      } else if (expr.type === 'star') {
+        return '*';
       }
       
       // Fallback para objetos desconocidos
